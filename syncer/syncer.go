@@ -34,7 +34,7 @@ type CachedSyncer struct {
 	mu sync.RWMutex
 }
 
-func New(service *client.Service, metaService *metadata.MetaService) *CachedSyncer {
+func NewCachedSyncer(service *client.Service, metaService *metadata.MetaService) *CachedSyncer {
 	return &CachedSyncer{
 		remoteService: service,
 		metaService:   metaService,

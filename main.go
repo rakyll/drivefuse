@@ -51,8 +51,14 @@ func main() {
 	driveService, _ = client.New(transport.Client())
 	blobManager = blob.New(cfg.GetBlobPath())
 
-	downloader := fileio.NewDownloader(transport.Client(), metaService, blobManager)
-	syncManager := syncer.New(driveService, metaService)
+	downloader := fileio.NewDownloader(
+		transport.Client(),
+		metaService,
+		blobManager)
+
+	syncManager := syncer.NewCachedSyncer(
+		driveService,
+		metaService)
 
 	if *flagBlockSync {
 		syncManager.Sync(true)
