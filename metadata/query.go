@@ -47,7 +47,7 @@ func (m *MetaService) setup() error {
 			"   upload bool," +
 			"   download bool)",
 		"create table if not exists info (key string, value string)",
-		"create unique index idx_remote on files (remoteId, parentId)",
+		"create unique index idx_remote on files (remoteId)",
 		"create unique index idx_k on info (key)"}
 	// don't remove the index, used by insert or replace into queries
 	for _, v := range queries {
