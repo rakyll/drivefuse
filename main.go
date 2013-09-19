@@ -16,11 +16,11 @@ package main
 
 import (
 	"flag"
-	"log"
 
 	"blob"
 	"config"
 	"fileio"
+	"logger"
 	"metadata"
 	"mount"
 	"syncer"
@@ -42,7 +42,7 @@ func main() {
 
 	cfg, err := config.New(*flagDataPath)
 	if err != nil {
-		log.Fatal("Error while reading and initializing configuration:", err)
+		logger.F("Error while reading and initializing configuration:", err)
 	}
 
 	transport := cfg.GetDefaultTransport()
@@ -65,6 +65,6 @@ func main() {
 	}
 	syncManager.Start()
 
-	log.Println("mounting...")
+	logger.V("mounting...")
 	mount.MountAndServe(*flagMountPoint, metaService, blobManager, downloader)
 }

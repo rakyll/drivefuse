@@ -15,10 +15,10 @@
 package syncer
 
 import (
-	"log"
 	"sync"
 	"time"
 
+	"logger"
 	"metadata"
 	client "third_party/code.google.com/p/google-api-go-client/drive/v2"
 )
@@ -55,12 +55,13 @@ func (d *CachedSyncer) Sync(isForce bool) (err error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	log.Println("Started syncer...")
+	logger.V("Started syncer...")
 	err = d.syncInbound(isForce)
 	if err != nil {
-		log.Println("error during sync", err)
+		logger.V("error during sync", err)
+		return
 	}
-	log.Println("Done syncing...")
+	logger.V("Done syncing...")
 	return
 }
 
@@ -100,7 +101,7 @@ func (d *CachedSyncer) syncInbound(isForce bool) (err error) {
 }
 
 func (d *CachedSyncer) mergeChanges(isInitialSync bool, rootId string, startChangeId int64, pageToken string) (nextPageToken string, err error) {
-	log.Println("merging changes starting with pageToken:", pageToken, "and startChangeId", startChangeId)
+	logger.V("merging changes starting with pageToken:", pageToken, "and startChangeId", startChangeId)
 
 	req := d.remoteService.Changes.List()
 	req.IncludeSubscribed(false)

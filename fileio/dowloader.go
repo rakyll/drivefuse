@@ -15,12 +15,12 @@
 package fileio
 
 import (
-	"log"
 	"net/http"
 	"sync"
 	"time"
 
 	"blob"
+	"logger"
 	"metadata"
 )
 
@@ -81,37 +81,37 @@ func (d *Downloader) tick() {
 func (d *Downloader) download(id string, checksum string) {
 	// TODO: handle all error cases, make sure queue is not blocked
 	// with erroneous files
-	log.Println("Downloading", id, checksum)
+	logger.V("Downloading", id, checksum)
 	var (
 		resp *http.Response
 		err  error
 	)
 	if resp, err = d.client.Get(BaseUrlDownloadHost + "/" + id); err != nil {
-		log.Println("error downloading", id, err)
+		logger.V("error downloading", id, err)
 		return
 	}
 
 	if resp.StatusCode == 404 {
 		d.metaService.DequeueFromIO("download", id)
-		log.Println("error downloading [not found]", id)
+		logger.V("error downloading [not found]", id)
 		return
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		log.Println("error downloading [not ok]", id, resp.StatusCode)
+		logger.V("error downloading [not ok]", id, resp.StatusCode)
 		return
 	}
 
 	defer resp.Body.Close()
 	err = d.blobMngr.Save(id, checksum, resp.Body)
 	if err != nil {
-		log.Println(err)
+		logger.V(err)
 		return
 	}
 
 	err = d.metaService.InitFile(id)
 	if err != nil {
-		log.Println(err)
+		logger.V(err)
 		return
 	}
 

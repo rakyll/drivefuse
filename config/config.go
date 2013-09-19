@@ -18,7 +18,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"log"
+	"logger"
 	"net/http"
 	"os"
 	"os/user"
@@ -107,7 +107,7 @@ func (c *Config) setup() error {
 }
 
 func (c *Config) readFromFile() (err error) {
-	log.Println("Reading configuration file...")
+	logger.V("Reading configuration file...")
 	var content []byte
 	if content, err = ioutil.ReadFile(c.GetConfigPath()); err != nil {
 		return

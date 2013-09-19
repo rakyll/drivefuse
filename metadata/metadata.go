@@ -17,11 +17,11 @@ package metadata
 import (
 	"database/sql"
 	"fmt"
-	"log"
 	"strconv"
 	"sync"
 	"time"
 
+	"logger"
 	_ "third_party/github.com/mattn/go-sqlite3"
 )
 
@@ -81,7 +81,7 @@ func (m *MetaService) Save(parentId string, id string, data *CachedDriveFile, do
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	log.Println("Caching metadata for", id)
+	logger.V("Caching metadata for", id)
 	return m.upsertFile(data, download, upload)
 }
 
@@ -89,7 +89,7 @@ func (m *MetaService) Delete(id string) (err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	log.Println("Deleting metadata for", id)
+	logger.V("Deleting metadata for", id)
 	return m.deleteFile(id)
 }
 
