@@ -14,16 +14,7 @@
 
 package syncer
 
-import (
-	"metadata"
-	driveclient "third_party/code.google.com/p/google-api-go-client/drive/v2"
-)
-
 type Syncer interface {
-	// Initiates a new Syncer with an API service and
-	// a metadata manager.
-	New(*driveclient.Service, *metadata.MetaService) *Syncer
-
 	// Starts a periodic syncing, returns immediately.
 	Start()
 
