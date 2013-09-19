@@ -16,9 +16,9 @@ package blob
 
 import (
 	"bufio"
-	"fmt"
 	"io"
 	"os"
+	"path"
 )
 
 type Manager struct {
@@ -59,7 +59,6 @@ func (f *Manager) Read(id string, checksum string, seek int64, l int) (blob []by
 	if err != nil {
 		return
 	}
-
 	blob = make([]byte, l)
 	file.Seek(seek, 0)
 	var s int
@@ -69,5 +68,5 @@ func (f *Manager) Read(id string, checksum string, seek int64, l int) (blob []by
 
 func (f *Manager) getBlobPath(id string, checksum string) string {
 	// TODO: shard the files, fs perf issue here
-	return fmt.Sprintf("%s%c%s==%s", f.blobPath, os.PathSeparator, id, checksum)
+	return path.Join(f.blobPath, id+"=="+checksum)
 }

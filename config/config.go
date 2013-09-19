@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"os"
 	"os/user"
+	"path"
 	"time"
 
 	"third_party/code.google.com/p/goauth2/oauth"
@@ -84,16 +85,16 @@ func (c *Config) GetDefaultTransport() *oauth.Transport {
 }
 
 func (c *Config) GetConfigPath() string {
-	return fmt.Sprintf("%s%c%s", c.path, os.PathSeparator, "config.json")
+	return path.Join(c.path, "config.json")
 }
 
 func (c *Config) GetMetadataPath() string {
-	return fmt.Sprintf("%s%c%s", c.path, os.PathSeparator, "meta.sql")
+	return path.Join(c.path, "meta.sql")
 }
 
 // TODO: blob path should be able to set absolutely
 func (c *Config) GetBlobPath() string {
-	return fmt.Sprintf("%s%c%s", c.path, os.PathSeparator, "blob")
+	return path.Join(c.path, "blob")
 }
 
 func (c *Config) GetMountPoint() string {
