@@ -18,13 +18,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"logger"
 	"net/http"
 	"os"
 	"os/user"
 	"path"
 	"time"
 
+	"logger"
 	"third_party/code.google.com/p/goauth2/oauth"
 )
 
@@ -92,8 +92,10 @@ func (c *Config) GetMetadataPath() string {
 	return path.Join(c.path, "meta.sql")
 }
 
-// TODO: blob path should be able to set absolutely
 func (c *Config) GetBlobPath() string {
+	if c.cfg != nil && c.cfg.BlobPath != "" {
+		return c.cfg.BlobPath
+	}
 	return path.Join(c.path, "blob")
 }
 
