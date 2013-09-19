@@ -66,5 +66,7 @@ func main() {
 	syncManager.Start()
 
 	logger.V("mounting...")
-	mount.MountAndServe(*flagMountPoint, metaService, blobManager, downloader)
+	if err = mount.MountAndServe(*flagMountPoint, metaService, blobManager, downloader); err != nil {
+		logger.F(err)
+	}
 }
