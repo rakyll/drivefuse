@@ -24,7 +24,8 @@ import (
 )
 
 const (
-	intervalSync = 30 * time.Second // TODO: should be adaptive
+	intervalSync   = 30 * time.Second // TODO: should be adaptive
+	layoutDateTime = "2013-09-19T14:29:12.570Z"
 )
 
 type CachedSyncer struct {
@@ -84,16 +85,7 @@ func (d *CachedSyncer) syncInbound(isForce bool) (err error) {
 		return
 	}
 
-	data := &metadata.CachedDriveFile{
-		Id:          metadata.IdRootFolder,
-		ParentId:    "",
-		Name:        rootFile.Title,
-		MimeType:    rootFile.MimeType,
-		FileSize:    rootFile.FileSize,
-		Md5Checksum: rootFile.Md5Checksum,
-		LastMod:     time.Now(), // TODO: parse
-	}
-
+	data := buildMetadata(metadata.IdRootFolder, "", rootFile)
 	if err = d.metaService.Save("", metadata.IdRootFolder, data, false, false); err != nil {
 		return
 	}
@@ -160,18 +152,23 @@ func (d *CachedSyncer) mergeChange(rootId string, item *client.Change) (err erro
 		if parentId == rootId {
 			parentId = metadata.IdRootFolder
 		}
-		metadata := &metadata.CachedDriveFile{
-			Id:          item.FileId,
-			ParentId:    parentId,        // ignore multiple parents
-			Name:        item.File.Title, // TODO: rename duplicates
-			MimeType:    item.File.MimeType,
-			FileSize:    item.File.FileSize,
-			Md5Checksum: item.File.Md5Checksum,
-			LastMod:     time.Now(), // TODO: parse
-		}
+		metadata := buildMetadata(item.FileId, parentId, item.File)
 		if err = d.metaService.Save(parentId, fileId, metadata, !metadata.IsFolder(), false); err != nil {
 			return
 		}
 	}
 	return
+}
+
+func buildMetadata(id string, parentId string, file *client.File) *metadata.CachedDriveFile {
+	lastMod, _ := time.Parse(layoutDateTime, file.ModifiedDate)
+	return &metadata.CachedDriveFile{
+		Id:          id,
+		ParentId:    parentId, // ignoring multiple parents
+		Name:        file.Title,
+		MimeType:    file.MimeType,
+		FileSize:    file.FileSize,
+		Md5Checksum: file.Md5Checksum,
+		LastMod:     lastMod,
+	}
 }

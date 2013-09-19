@@ -56,12 +56,22 @@ type GoogleDriveFolder struct {
 	LastMod  time.Time
 }
 
+type GoogleDriveFile struct {
+	Id          string
+	Name        string
+	MimeType    string
+	Md5Checksum string
+	Size        int64
+	LastMod     time.Time
+}
+
 func (f GoogleDriveFolder) Attr() fuse.Attr {
 	return fuse.Attr{
-		Mode: os.ModeDir | 0400,
-		Uid:  uint32(os.Getuid()),
-		Gid:  uint32(os.Getgid()),
-		Size: uint64(f.Size),
+		Mode:  os.ModeDir | 0400,
+		Uid:   uint32(os.Getuid()),
+		Gid:   uint32(os.Getgid()),
+		Size:  uint64(f.Size),
+		Mtime: f.LastMod,
 	}
 }
 
@@ -79,7 +89,11 @@ func (f GoogleDriveFolder) Lookup(name string, intr fuse.Intr) (fuse.Node, fuse.
 	if file.MimeType == metadata.MimeTypeFolder {
 		return &GoogleDriveFolder{Id: file.Id, Name: file.Name, Size: file.FileSize}, nil
 	}
-	return GoogleDriveFile{Id: file.Id, Name: file.Name, Size: file.FileSize, Md5Checksum: file.Md5Checksum}, nil
+	return GoogleDriveFile{
+		Id:          file.Id,
+		Name:        file.Name,
+		Size:        file.FileSize,
+		Md5Checksum: file.Md5Checksum}, nil
 }
 
 func (f GoogleDriveFolder) ReadDir(intr fuse.Intr) ([]fuse.Dirent, fuse.Error) {
@@ -91,22 +105,13 @@ func (f GoogleDriveFolder) ReadDir(intr fuse.Intr) ([]fuse.Dirent, fuse.Error) {
 	return ents, nil
 }
 
-type GoogleDriveFile struct {
-	Id          string
-	Name        string
-	MimeType    string
-	Md5Checksum string
-	Size        int64
-	LastMod     time.Time
-}
-
 func (f GoogleDriveFile) Attr() fuse.Attr {
 	return fuse.Attr{
-		Mode: 0400,
-		Uid:  uint32(os.Getuid()),
-		Gid:  uint32(os.Getgid()),
-		Size: uint64(f.Size),
-		// TODO: add last mod
+		Mode:  0400,
+		Uid:   uint32(os.Getuid()),
+		Gid:   uint32(os.Getgid()),
+		Size:  uint64(f.Size),
+		Mtime: f.LastMod,
 	}
 }
 
