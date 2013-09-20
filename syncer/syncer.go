@@ -73,12 +73,12 @@ func (d *CachedSyncer) syncOutbound(rootId string, isRecursive bool, isForce boo
 func (d *CachedSyncer) syncInbound(isForce bool) (err error) {
 	var largestChangeId int64
 	largestChangeId, err = d.metaService.GetLargestChangeId()
+	isInitialSync := largestChangeId == 0
 	if isForce || err != nil {
 		largestChangeId = 0
 	} else {
 		largestChangeId += 1
 	}
-	isInitialSync := largestChangeId == 0
 
 	// retrieve metadata about root
 	var rootFile *client.File
