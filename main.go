@@ -15,22 +15,26 @@
 package main
 
 import (
-	"flag"
-
+	"auth"
 	"blob"
 	"config"
 	"fileio"
+	"flag"
 	"logger"
 	"metadata"
 	"mount"
+	"os"
 	"syncer"
 	client "third_party/code.google.com/p/google-api-go-client/drive/v2"
+	"wizard"
 )
 
 var (
-	flagDataPath   = flag.String("datapath", "", "path of the data directory")
+	flagDataPath   = flag.String("datapath", config.DefaultDatadir(), "path of the data directory")
 	flagMountPoint = flag.String("mountpoint", "", "mount point")
 	flagBlockSync  = flag.Bool("blocksync", false, "set true to force blocking sync on startup")
+
+	flagWizard = flag.Bool("wizard", false, "Run the startup wizard.")
 
 	metaService  *metadata.MetaService
 	driveService *client.Service
@@ -40,16 +44,22 @@ var (
 func main() {
 	flag.Parse()
 
-	cfg, err := config.New(*flagDataPath)
+	env, err := config.NewEnv(*flagDataPath)
+	if *flagWizard {
+		wizard.Run(env)
+		os.Exit(0)
+	}
+
+	err = env.LoadConfig()
 	if err != nil {
 		logger.F("Error while reading and initializing configuration:", err)
 	}
 
-	transport := cfg.GetDefaultTransport()
+	transport := auth.ClientTransport(env.Config.FirstAccount())
 
-	metaService, _ = metadata.New(cfg.GetMetadataPath())
+	metaService, _ = metadata.New(env.MetadataPath())
 	driveService, _ = client.New(transport.Client())
-	blobManager = blob.New(cfg.GetBlobPath())
+	blobManager = blob.New(env.BlobPath())
 
 	downloader := fileio.NewDownloader(
 		transport.Client(),
@@ -66,7 +76,12 @@ func main() {
 	syncManager.Start()
 
 	logger.V("mounting...")
-	if err = mount.MountAndServe(*flagMountPoint, metaService, blobManager, downloader); err != nil {
+	mountpoint := env.Config.FirstAccount().LocalPath
+	err = os.MkdirAll(mountpoint, 0774)
+	if err != nil {
+		logger.F(err)
+	}
+	if err = mount.MountAndServe(mountpoint, metaService, blobManager, downloader); err != nil {
 		logger.F(err)
 	}
 }

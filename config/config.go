@@ -16,108 +16,63 @@ package config
 
 import (
 	"encoding/json"
-	"fmt"
-	"io/ioutil"
-	"net/http"
+	"io"
+	_ "logger"
 	"os"
-	"os/user"
-	"path"
-	"time"
-
-	"logger"
-	"third_party/code.google.com/p/goauth2/oauth"
 )
 
-const (
-	GoogleOAuth2AuthURL  = "https://accounts.google.com/o/oauth2/auth"
-	GoogleOAuth2TokenURL = "https://accounts.google.com/o/oauth2/token"
-)
-
-type credentialsType struct {
+type AccountConfig struct {
+	AccountName  string `json:"account_name"`
+	LocalPath    string `json:"local_path"`
+	RemoteId     string `json:"remote_id"`
 	ClientId     string `json:"client_id"`
 	ClientSecret string `json:"client_secret"`
 	RefreshToken string `json:"refresh_token"`
 }
 
-type configType struct {
-	Credentials credentialsType
-	BlobPath    string `json:"blob_path,omitempty"`
-	MountPath   string `json:"mount_path,omitempty"`
-}
-
 type Config struct {
-	path string
-	cfg  *configType
+	Accounts []*AccountConfig `json:"accounts"`
 }
 
-func New(path string) (*Config, error) {
-	if path == "" {
-		usr, err := user.Current()
-		if err != nil {
-			return nil, err
-		}
-		path = fmt.Sprintf("%s%c%s", usr.HomeDir, os.PathSeparator, ".googledrive")
+func (c *Config) Save(path string) error {
+	f, err := os.Create(path)
+	if err != nil {
+		return err
 	}
-	c := &Config{path: path}
-	c.setup()
-	// read and unmarshall configuration file
-	if err := c.readFromFile(); err != nil {
-		return nil, err
+	defer f.Close()
+	return c.Write(f)
+}
+
+func (c *Config) Json() ([]byte, error) {
+	return json.MarshalIndent(c, "", "  ")
+}
+
+func (c *Config) Write(w io.Writer) error {
+	bs, err := c.Json()
+	if err != nil {
+		return err
 	}
-	return c, nil
-}
-
-// TODO(burcu): Doesn't belong to this package, move somewhere else
-func (c *Config) GetDefaultTransport() *oauth.Transport {
-	oauthConf := &oauth.Config{
-		ClientId:     c.cfg.Credentials.ClientId,
-		ClientSecret: c.cfg.Credentials.ClientSecret,
-		AuthURL:      GoogleOAuth2AuthURL,
-		TokenURL:     GoogleOAuth2TokenURL,
+	_, err = w.Write(bs)
+	if err != nil {
+		return err
 	}
-	// force refreshes the access token on start, make sure
-	// refresh request in parallel are being started
-	return &oauth.Transport{
-		Token:     &oauth.Token{RefreshToken: c.cfg.Credentials.RefreshToken, Expiry: time.Now()},
-		Config:    oauthConf,
-		Transport: http.DefaultTransport,
-	}
-}
-
-func (c *Config) GetConfigPath() string {
-	return path.Join(c.path, "config.json")
-}
-
-func (c *Config) GetMetadataPath() string {
-	return path.Join(c.path, "meta.sql")
-}
-
-func (c *Config) GetBlobPath() string {
-	if c.cfg != nil && c.cfg.BlobPath != "" {
-		return c.cfg.BlobPath
-	}
-	return path.Join(c.path, "blob")
-}
-
-func (c *Config) GetMountPoint() string {
-	return c.cfg.MountPath
-}
-
-func (c *Config) setup() error {
-	// TODO(burcud): Initialize with a sample config.
-	return os.MkdirAll(c.GetBlobPath(), 0750)
-}
-
-func (c *Config) readFromFile() (err error) {
-	logger.V("Reading configuration file...")
-	var content []byte
-	if content, err = ioutil.ReadFile(c.GetConfigPath()); err != nil {
-		return
-	}
-	var cfg configType
-	if err = json.Unmarshal(content, &cfg); err != nil {
-		return
-	}
-	c.cfg = &cfg
 	return nil
+}
+
+func (c *Config) Load(path string) error {
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	return c.Read(f)
+}
+
+func (c *Config) Read(r io.Reader) error {
+	return json.NewDecoder(r).Decode(c)
+}
+
+// Hack while we only support one account
+func (c *Config) FirstAccount() *AccountConfig {
+	return c.Accounts[0]
 }
