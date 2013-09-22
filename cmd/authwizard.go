@@ -12,19 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package wizard
+package cmd
 
 import (
 	"auth"
 	"config"
 	"fmt"
-	"log"
+
 	"third_party/code.google.com/p/goauth2/oauth"
 	"third_party/code.google.com/p/google-api-go-client/drive/v2"
+
+	"logger"
 )
 
-const motd1 string = "Welcome to drived setup and auth wizard."
-const motd2 string = "Add an account."
+const (
+    messageWelcome = "Welcome to drived setup and auth wizard."
+    messageAddAccount = "Add an account."
+)
 
 var ClientIdQuestion = &Question{
 	"client_id",
@@ -76,13 +80,13 @@ type Question struct {
 	Default string
 }
 
-func ReadQuestion(opt *Question) string {
+func readQuestion(opt *Question) string {
 	var s string
 	for s == "" {
 		fmt.Printf("%v %v [default=%v]>> ", opt.Usage, Bold(opt.Name), Blue(opt.Default))
 		_, err := fmt.Scanln(&s)
 		if err != nil && err.Error() != "unexpected newline" {
-			log.Fatalln("Bad scan", err)
+			logger.F("Bad scan.", err)
 		}
 		if s == "" {
 			s = opt.Default
@@ -91,47 +95,46 @@ func ReadQuestion(opt *Question) string {
 	return s
 }
 
-func ListFolders(tr *oauth.Transport) {
+func listFolders(tr *oauth.Transport) {
 	svc, err := drive.New(tr.Client())
 	if err != nil {
-		log.Fatalln(err)
+		logger.F(err)
 	}
 	q := "mimeType='application/vnd.google-apps.folder' and trashed=false"
+  // TODO: pagination.
 	files, err := svc.Files.List().Q(q).Do()
 	if err != nil {
-		log.Fatalln(err)
+		logger.F(err)
 	}
 	for _, f := range files.Items {
 		fmt.Println(f.Title, f.Id)
 	}
 }
 
-func Auth(cfg *config.AccountConfig) string {
-	c := auth.AuthConfig(cfg)
-	tr := &oauth.Transport{Config: c}
-	url := c.AuthCodeURL("")
-	fmt.Println("Visit this URL to get a code.")
+func retrieveRefreshToken(act *config.Account) string {
+	tr := auth.NewTransport(act)
+	url := tr.Config.AuthCodeURL("")
+	fmt.Println("Visit this URL to get an authorization code.")
 	fmt.Println(url)
-	code := ReadQuestion(AuthorizationCodeQuestion)
+	code := readQuestion(AuthorizationCodeQuestion)
 	token, err := tr.Exchange(code)
 	if err != nil {
-		log.Fatalln("Failed to exchange authorization code.", err)
+		logger.F("Failed to exchange authorization code.", err)
 	}
 	return token.RefreshToken
 }
 
-func ReadAccount() *config.AccountConfig {
-	cfg := &config.AccountConfig{
-		AccountName:  ReadQuestion(AccountNameQuestion),
-		LocalPath:    ReadQuestion(LocalPathQuestion),
-		ClientId:     ReadQuestion(ClientIdQuestion),
-		ClientSecret: ReadQuestion(ClientSecretQuestion),
+func readAccount() *config.Account {
+	cfg := &config.Account{
+		LocalPath:    readQuestion(LocalPathQuestion),
+		ClientId:     readQuestion(ClientIdQuestion),
+		ClientSecret: readQuestion(ClientSecretQuestion),
 	}
-	cfg.RefreshToken = Auth(cfg)
+	cfg.RefreshToken = retrieveRefreshToken(cfg)
 	for cfg.RemoteId == "" {
-		rid := ReadQuestion(RemoteIdQuestion)
+		rid := readQuestion(RemoteIdQuestion)
 		if rid == "L" {
-			ListFolders(auth.ClientTransport(cfg))
+			listFolders(auth.NewTransport(cfg))
 		} else {
 			cfg.RemoteId = rid
 		}
@@ -139,22 +142,22 @@ func ReadAccount() *config.AccountConfig {
 	return cfg
 }
 
-func ReadConfig() *config.Config {
-	return &config.Config{Accounts: []*config.AccountConfig{ReadAccount()}}
+func readConfig(dataDir string) *config.Config {
+	return &config.Config{DataDir: dataDir, Accounts: []*config.Account{readAccount()}}
 }
 
-func Run(env *config.Env) {
-	log.Println(motd1)
-	log.Println(motd2)
-	cfg := ReadConfig()
-	err := cfg.Save(env.ConfigPath())
+func RunAuthWizard(dataDir string) {
+	fmt.Println(messageWelcome)
+	fmt.Println(messageAddAccount)
+	cfg := readConfig(dataDir)
+	err := cfg.Save()
 	if err != nil {
-		log.Fatalln(err)
+		logger.F(err)
 	}
 	j, err := cfg.Json()
 	if err != nil {
-		log.Fatalln(err)
+		logger.F(err)
 	}
-	log.Println(string(j))
-	log.Println("Config written to", env.ConfigPath())
+	fmt.Println(string(j))
+	fmt.Println("Config written to", cfg.ConfigPath())
 }

@@ -15,26 +15,28 @@
 package main
 
 import (
+	"flag"
+	"os"
+
+	client "third_party/code.google.com/p/google-api-go-client/drive/v2"
+
 	"auth"
+	"cmd"
 	"blob"
 	"config"
 	"fileio"
-	"flag"
 	"logger"
 	"metadata"
 	"mount"
-	"os"
 	"syncer"
-	client "third_party/code.google.com/p/google-api-go-client/drive/v2"
-	"wizard"
 )
 
 var (
-	flagDataPath   = flag.String("datapath", config.DefaultDatadir(), "path of the data directory")
+	flagDataPath   = flag.String("datapath", "", "path of the data directory")
 	flagMountPoint = flag.String("mountpoint", "", "mount point")
 	flagBlockSync  = flag.Bool("blocksync", false, "set true to force blocking sync on startup")
 
-	flagWizard = flag.Bool("wizard", false, "Run the startup wizard.")
+	flagRunAuthWizard = flag.Bool("wizard", false, "Run the startup wizard.")
 
 	metaService  *metadata.MetaService
 	driveService *client.Service
@@ -44,22 +46,26 @@ var (
 func main() {
 	flag.Parse()
 
-	env, err := config.NewEnv(*flagDataPath)
-	if *flagWizard {
-		wizard.Run(env)
+	if *flagRunAuthWizard {
+		cmd.RunAuthWizard(*flagDataPath)
 		os.Exit(0)
 	}
 
-	err = env.LoadConfig()
+	cfg := config.NewConfig(*flagDataPath)
+  err := cfg.Setup()
 	if err != nil {
-		logger.F("Error while reading and initializing configuration:", err)
+		logger.F("Error initializing configuration.", err)
+	}
+	err = cfg.Load()
+	if err != nil {
+		logger.F("Did you mean --wizard? Error reading configuration.", err)
 	}
 
-	transport := auth.ClientTransport(env.Config.FirstAccount())
+	transport := auth.NewTransport(cfg.FirstAccount())
 
-	metaService, _ = metadata.New(env.MetadataPath())
+	metaService, _ = metadata.New(cfg.MetadataPath())
 	driveService, _ = client.New(transport.Client())
-	blobManager = blob.New(env.BlobPath())
+	blobManager = blob.New(cfg.BlobPath())
 
 	downloader := fileio.NewDownloader(
 		transport.Client(),
@@ -76,7 +82,7 @@ func main() {
 	syncManager.Start()
 
 	logger.V("mounting...")
-	mountpoint := env.Config.FirstAccount().LocalPath
+	mountpoint := cfg.FirstAccount().LocalPath
 	err = os.MkdirAll(mountpoint, 0774)
 	if err != nil {
 		logger.F(err)

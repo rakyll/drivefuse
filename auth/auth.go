@@ -1,10 +1,25 @@
+// Copyright 2013 Google Inc. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package auth
 
 import (
 	"config"
 	"net/http"
-	"third_party/code.google.com/p/goauth2/oauth"
 	"time"
+
+	"third_party/code.google.com/p/goauth2/oauth"
 )
 
 const (
@@ -15,16 +30,7 @@ const (
 	AccessType           string = "offline"
 )
 
-func ClientConfig(cfg *config.AccountConfig) *oauth.Config {
-	return &oauth.Config{
-		ClientId:     cfg.ClientId,
-		ClientSecret: cfg.ClientSecret,
-		AuthURL:      GoogleOAuth2AuthURL,
-		TokenURL:     GoogleOAuth2TokenURL,
-	}
-}
-
-func AuthConfig(cfg *config.AccountConfig) *oauth.Config {
+func newConfig(cfg *config.Account) *oauth.Config {
 	return &oauth.Config{
 		ClientId:     cfg.ClientId,
 		ClientSecret: cfg.ClientSecret,
@@ -36,16 +42,10 @@ func AuthConfig(cfg *config.AccountConfig) *oauth.Config {
 	}
 }
 
-func Transport(cfg *config.AccountConfig, oauthConfig *oauth.Config) *oauth.Transport {
-	// force refreshes the access token on start, make sure
-	// refresh request in parallel are being started
+func NewTransport(cfg *config.Account) *oauth.Transport {
 	return &oauth.Transport{
-		Config:    oauthConfig,
+		Config:    newConfig(cfg),
 		Transport: http.DefaultTransport,
 		Token:     &oauth.Token{RefreshToken: cfg.RefreshToken, Expiry: time.Now()},
 	}
-}
-
-func ClientTransport(cfg *config.AccountConfig) *oauth.Transport {
-	return Transport(cfg, ClientConfig(cfg))
 }

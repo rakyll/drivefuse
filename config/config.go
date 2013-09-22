@@ -17,12 +17,37 @@ package config
 import (
 	"encoding/json"
 	"io"
-	_ "logger"
 	"os"
+  "os/user"
+  "path/filepath"
+
+	"logger"
 )
 
-type AccountConfig struct {
-	AccountName  string `json:"account_name"`
+const (
+	configName = "config.json"
+	metaName   = "meta.sql"
+	blobName   = "blob"
+)
+
+func DefaultMountpoint() string {
+	return HomeDir("google-drive")
+}
+
+func DefaultDataDir() string {
+	return HomeDir(".drived")
+}
+
+func HomeDir(path ...string) string {
+	usr, err := user.Current()
+	if err != nil {
+		return ""
+	}
+	path = append([]string{usr.HomeDir}, path...)
+	return filepath.Join(path...)
+}
+
+type Account struct {
 	LocalPath    string `json:"local_path"`
 	RemoteId     string `json:"remote_id"`
 	ClientId     string `json:"client_id"`
@@ -31,11 +56,25 @@ type AccountConfig struct {
 }
 
 type Config struct {
-	Accounts []*AccountConfig `json:"accounts"`
+  DataDir string `json:"-"` // omits from json marshal/unmarshal
+	Accounts []*Account `json:"accounts"`
 }
 
-func (c *Config) Save(path string) error {
-	f, err := os.Create(path)
+func NewConfig(dataDir string) *Config {
+  if dataDir == "" {
+    dataDir = DefaultDataDir()
+  }
+  logger.D("Data directory is", dataDir)
+  return &Config{DataDir: dataDir}
+}
+
+// Setup initial config requirements - only need some directories for now.
+func (c *Config) Setup() error {
+  return os.MkdirAll(c.BlobPath(), 0750)
+}
+
+func (c *Config) Save() error {
+	f, err := os.Create(c.ConfigPath())
 	if err != nil {
 		return err
 	}
@@ -59,8 +98,8 @@ func (c *Config) Write(w io.Writer) error {
 	return nil
 }
 
-func (c *Config) Load(path string) error {
-	f, err := os.Open(path)
+func (c *Config) Load() error {
+	f, err := os.Open(c.ConfigPath())
 	if err != nil {
 		return err
 	}
@@ -73,6 +112,23 @@ func (c *Config) Read(r io.Reader) error {
 }
 
 // Hack while we only support one account
-func (c *Config) FirstAccount() *AccountConfig {
+func (c *Config) FirstAccount() *Account {
 	return c.Accounts[0]
+}
+
+func (c *Config) DataPath(path ...string) string {
+	path = append([]string{c.DataDir}, path...)
+	return filepath.Join(path...)
+}
+
+func (c *Config) ConfigPath() string {
+	return c.DataPath(configName)
+}
+
+func (c *Config) BlobPath() string {
+	return c.DataPath(blobName)
+}
+
+func (c *Config) MetadataPath() string {
+	return c.DataPath(metaName)
 }
