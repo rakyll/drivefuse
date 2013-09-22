@@ -58,7 +58,8 @@ func main() {
 
 	syncManager := syncer.NewCachedSyncer(
 		driveService,
-		metaService)
+		metaService,
+		blobManager)
 
 	if *flagBlockSync {
 		syncManager.Sync(true)

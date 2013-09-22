@@ -18,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	"blob"
 	"logger"
 	"metadata"
 	client "third_party/code.google.com/p/google-api-go-client/drive/v2"
@@ -31,14 +32,16 @@ const (
 type CachedSyncer struct {
 	remoteService *client.Service
 	metaService   *metadata.MetaService
+	blobManager   *blob.Manager
 
 	mu sync.RWMutex
 }
 
-func NewCachedSyncer(service *client.Service, metaService *metadata.MetaService) *CachedSyncer {
+func NewCachedSyncer(service *client.Service, metaService *metadata.MetaService, blobManager *blob.Manager) *CachedSyncer {
 	return &CachedSyncer{
 		remoteService: service,
 		metaService:   metaService,
+		blobManager:   blobManager,
 	}
 }
 
@@ -136,8 +139,12 @@ func (d *CachedSyncer) mergeChanges(isInitialSync bool, rootId string, startChan
 
 func (d *CachedSyncer) mergeChange(rootId string, item *client.Change) (err error) {
 	if item.Deleted || item.File.Labels.Trashed {
-		// delete
+		// TODO(burcud): Handle directory deletions
 		if d.metaService.Delete(item.FileId); err != nil {
+			return
+		}
+		// delete contents
+		if d.blobManager.Delete(item.FileId); err != nil {
 			return
 		}
 	} else {

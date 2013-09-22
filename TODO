@@ -1,5 +1,6 @@
 * Avoid redownloads if content hasnt changed (on metadata only changes).
 * Better error handling on downloads.
+* Handle remote directory deletions.
 * Handle local mv/renames, additions, modifications and deletions, switch to traverse syncer.
 * Auth wizard.
 * Handle merge conflicts.

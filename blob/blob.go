@@ -72,6 +72,11 @@ func (f *Manager) Read(id string, checksum string, seek int64, l int) (blob []by
 	return blob, int64(s), err
 }
 
+func (f *Manager) Delete(id string) error {
+	// TODO(burcud): rm directory if not required anymore
+	return f.cleanup(id, "*")
+}
+
 func (f *Manager) cleanup(id string, checksum string) (err error) {
 	var blobs []os.FileInfo
 	if blobs, err = ioutil.ReadDir(f.getBlobDir(id)); err != nil {
@@ -79,7 +84,7 @@ func (f *Manager) cleanup(id string, checksum string) (err error) {
 	}
 	for _, file := range blobs {
 		if file.Name() != f.getBlobName(id, checksum) && strings.Contains(file.Name(), f.getBlobName(id, "")) {
-			logger.V("Deleting", file.Name())
+			logger.V("Deleting blob", file.Name())
 			// errors are not show stoppers here, they will cost additional disk space
 			// we can get rid of on the next removal try.
 			if rmErr := os.Remove(path.Join(f.getBlobDir(id), file.Name())); rmErr != nil {
