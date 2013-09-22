@@ -34,6 +34,9 @@ func New(blobPath string) *Manager {
 
 func (f *Manager) Save(id string, checksum string, rc io.ReadCloser) error {
 	f.cleanup(id, checksum)
+	if err := os.MkdirAll(f.getBlobDir(id), 0750); err != nil {
+		return err
+	}
 	file, err := os.OpenFile(f.getBlobPath(id, checksum), os.O_CREATE|os.O_RDWR, 0750)
 	if file == nil && err != nil {
 		return err
@@ -88,8 +91,8 @@ func (f *Manager) cleanup(id string, checksum string) (err error) {
 }
 
 func (f *Manager) getBlobDir(id string) string {
-	// TODO: shard the files, fs perf issue here
-	return f.blobPath
+	l := len(id)
+	return path.Join(f.blobPath, id[l-6:l-3], id[l-3:l])
 }
 
 func (f *Manager) getBlobName(id string, checksum string) string {
