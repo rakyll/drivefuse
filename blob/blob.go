@@ -92,7 +92,7 @@ func (f *Manager) cleanup(id string, checksum string) (err error) {
 
 func (f *Manager) getBlobDir(id string) string {
 	l := len(id)
-	return path.Join(f.blobPath, id[l-6:l-3], id[l-3:l])
+	return path.Join(f.blobPath, id[l-2:l])
 }
 
 func (f *Manager) getBlobName(id string, checksum string) string {
