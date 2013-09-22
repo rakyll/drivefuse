@@ -18,10 +18,11 @@ import (
 	"bufio"
 	"io"
 	"io/ioutil"
-	"logger"
 	"os"
 	"path"
 	"strings"
+
+	"github.com/rakyll/drivefuse/logger"
 )
 
 type Manager struct {

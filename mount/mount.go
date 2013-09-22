@@ -18,10 +18,10 @@ import (
 	"os"
 	"time"
 
-	"blob"
-	"fileio"
-	"metadata"
-	"third_party/code.google.com/p/rsc/fuse"
+	"github.com/rakyll/drivefuse/blob"
+	"github.com/rakyll/drivefuse/fileio"
+	"github.com/rakyll/drivefuse/metadata"
+	"github.com/rakyll/drivefuse/third_party/code.google.com/p/rsc/fuse"
 )
 
 var (

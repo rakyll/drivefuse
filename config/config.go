@@ -24,8 +24,8 @@ import (
 	"path"
 	"time"
 
-	"logger"
-	"third_party/code.google.com/p/goauth2/oauth"
+	"github.com/rakyll/drivefuse/logger"
+	"github.com/rakyll/drivefuse/third_party/code.google.com/p/goauth2/oauth"
 )
 
 const (

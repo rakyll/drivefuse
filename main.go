@@ -17,14 +17,14 @@ package main
 import (
 	"flag"
 
-	"blob"
-	"config"
-	"fileio"
-	"logger"
-	"metadata"
-	"mount"
-	"syncer"
-	client "third_party/code.google.com/p/google-api-go-client/drive/v2"
+	"github.com/rakyll/drivefuse/blob"
+	"github.com/rakyll/drivefuse/config"
+	"github.com/rakyll/drivefuse/fileio"
+	"github.com/rakyll/drivefuse/logger"
+	"github.com/rakyll/drivefuse/metadata"
+	"github.com/rakyll/drivefuse/mount"
+	"github.com/rakyll/drivefuse/syncer"
+	client "github.com/rakyll/drivefuse/third_party/code.google.com/p/google-api-go-client/drive/v2"
 )
 
 var (

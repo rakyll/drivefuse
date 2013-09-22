@@ -18,10 +18,10 @@ import (
 	"sync"
 	"time"
 
-	"blob"
-	"logger"
-	"metadata"
-	client "third_party/code.google.com/p/google-api-go-client/drive/v2"
+	"github.com/rakyll/drivefuse/blob"
+	"github.com/rakyll/drivefuse/logger"
+	"github.com/rakyll/drivefuse/metadata"
+	client "github.com/rakyll/drivefuse/third_party/code.google.com/p/google-api-go-client/drive/v2"
 )
 
 const (
