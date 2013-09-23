@@ -66,6 +66,8 @@ func (f *Manager) Read(id string, checksum string, seek int64, l int) (blob []by
 	if err != nil {
 		return
 	}
+	defer file.Close()
+
 	blob = make([]byte, l)
 	file.Seek(seek, 0)
 	var s int
