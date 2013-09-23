@@ -6,3 +6,4 @@
 * Handle more metadata such as lastMod.
 * Show sync status, maybe an info service on port XXXXX.
 * Adaptive sync scheduling.
+* Overview code for possible deadlocks.
