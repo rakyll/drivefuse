@@ -27,8 +27,8 @@ import (
 )
 
 const (
-    messageWelcome = "Welcome to drived setup and auth wizard."
-    messageAddAccount = "Add an account."
+	messageWelcome    = "Welcome to drived setup and auth wizard."
+	messageAddAccount = "Add an account."
 )
 
 var clientIdQuestion = &question{
@@ -94,7 +94,7 @@ func listFolders(tr *oauth.Transport) {
 		logger.F(err)
 	}
 	q := "mimeType='application/vnd.google-apps.folder' and trashed=false"
-  // TODO: pagination.
+	// TODO: pagination.
 	files, err := svc.Files.List().Q(q).Do()
 	if err != nil {
 		logger.F(err)

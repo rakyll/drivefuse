@@ -19,8 +19,8 @@ import (
 	"os"
 
 	"github.com/rakyll/drivefuse/auth"
-	"github.com/rakyll/drivefuse/cmd"
 	"github.com/rakyll/drivefuse/blob"
+	"github.com/rakyll/drivefuse/cmd"
 	"github.com/rakyll/drivefuse/config"
 	"github.com/rakyll/drivefuse/fileio"
 	"github.com/rakyll/drivefuse/logger"
@@ -32,7 +32,7 @@ import (
 )
 
 var (
-	flagDataDir   = flag.String("datadir", config.DefaultDataDir(), "path of the data directory")
+	flagDataDir    = flag.String("datadir", config.DefaultDataDir(), "path of the data directory")
 	flagMountPoint = flag.String("mountpoint", config.DefaultMountpoint(), "mount point")
 	flagBlockSync  = flag.Bool("blocksync", false, "set true to force blocking sync on startup")
 
@@ -52,7 +52,7 @@ func main() {
 	}
 
 	cfg := config.NewConfig(*flagDataDir)
-  err := cfg.Setup()
+	err := cfg.Setup()
 	if err != nil {
 		logger.F("Error initializing configuration.", err)
 	}
