@@ -1,5 +1,6 @@
 * Better error handling on downloads.
-* Handle remote directory deletions.
+* Introduce garbage collector for blob deletions
+* Unmount on SIGTERM
 * Handle local mv/renames, additions, modifications and deletions, switch to traverse syncer.
 * Auth wizard.
 * Handle merge conflicts.
