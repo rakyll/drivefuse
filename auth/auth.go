@@ -15,11 +15,11 @@
 package auth
 
 import (
-	"config"
 	"net/http"
 	"time"
 
-	"third_party/code.google.com/p/goauth2/oauth"
+	"github.com/rakyll/drivefuse/config"
+	"github.com/rakyll/drivefuse/third_party/code.google.com/p/goauth2/oauth"
 )
 
 const (

@@ -18,17 +18,17 @@ import (
 	"flag"
 	"os"
 
-	client "third_party/code.google.com/p/google-api-go-client/drive/v2"
+	"github.com/rakyll/drivefuse/auth"
+	"github.com/rakyll/drivefuse/cmd"
+	"github.com/rakyll/drivefuse/blob"
+	"github.com/rakyll/drivefuse/config"
+	"github.com/rakyll/drivefuse/fileio"
+	"github.com/rakyll/drivefuse/logger"
+	"github.com/rakyll/drivefuse/metadata"
+	"github.com/rakyll/drivefuse/mount"
+	"github.com/rakyll/drivefuse/syncer"
 
-	"auth"
-	"cmd"
-	"blob"
-	"config"
-	"fileio"
-	"logger"
-	"metadata"
-	"mount"
-	"syncer"
+	client "github.com/rakyll/drivefuse/third_party/code.google.com/p/google-api-go-client/drive/v2"
 )
 
 var (
@@ -74,7 +74,8 @@ func main() {
 
 	syncManager := syncer.NewCachedSyncer(
 		driveService,
-		metaService)
+		metaService,
+		blobManager)
 
 	if *flagBlockSync {
 		syncManager.Sync(true)

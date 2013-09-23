@@ -20,9 +20,9 @@ import (
 )
 
 const (
-	LogLevelFatal   = 0
-	LogLevelVerbose = 1
-	LogLevelDebug   = 2
+	LogLevelFatal = iota
+	LogLevelVerbose
+	LogLevelDebug
 )
 
 var (

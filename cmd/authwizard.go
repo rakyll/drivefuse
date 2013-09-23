@@ -15,14 +15,13 @@
 package cmd
 
 import (
-	"auth"
-	"config"
 	"fmt"
 
-	"third_party/code.google.com/p/goauth2/oauth"
-	"third_party/code.google.com/p/google-api-go-client/drive/v2"
-
-	"logger"
+	"github.com/rakyll/drivefuse/auth"
+	"github.com/rakyll/drivefuse/config"
+	"github.com/rakyll/drivefuse/logger"
+	"github.com/rakyll/drivefuse/third_party/code.google.com/p/goauth2/oauth"
+	"github.com/rakyll/drivefuse/third_party/code.google.com/p/google-api-go-client/drive/v2"
 )
 
 const (

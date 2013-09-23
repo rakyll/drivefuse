@@ -17,8 +17,12 @@ package blob
 import (
 	"bufio"
 	"io"
+	"io/ioutil"
 	"os"
 	"path"
+	"strings"
+
+	"github.com/rakyll/drivefuse/logger"
 )
 
 type Manager struct {
@@ -30,7 +34,10 @@ func New(blobPath string) *Manager {
 }
 
 func (f *Manager) Save(id string, checksum string, rc io.ReadCloser) error {
-	// TODO(burcud): Remove old versions of the same file
+	f.cleanup(id, checksum)
+	if err := os.MkdirAll(f.getBlobDir(id), 0750); err != nil {
+		return err
+	}
 	file, err := os.OpenFile(f.getBlobPath(id, checksum), os.O_CREATE|os.O_RDWR, 0750)
 	if file == nil && err != nil {
 		return err
@@ -66,7 +73,38 @@ func (f *Manager) Read(id string, checksum string, seek int64, l int) (blob []by
 	return blob, int64(s), err
 }
 
+func (f *Manager) Delete(id string) error {
+	// TODO(burcud): rm directory if not required anymore
+	return f.cleanup(id, "*")
+}
+
+func (f *Manager) cleanup(id string, checksum string) (err error) {
+	var blobs []os.FileInfo
+	if blobs, err = ioutil.ReadDir(f.getBlobDir(id)); err != nil {
+		return
+	}
+	for _, file := range blobs {
+		if file.Name() != f.getBlobName(id, checksum) && strings.Contains(file.Name(), f.getBlobName(id, "")) {
+			logger.V("Deleting blob", file.Name())
+			// errors are not show stoppers here, they will cost additional disk space
+			// we can get rid of on the next removal try.
+			if rmErr := os.Remove(path.Join(f.getBlobDir(id), file.Name())); rmErr != nil {
+				logger.V(rmErr)
+			}
+		}
+	}
+	return nil
+}
+
+func (f *Manager) getBlobDir(id string) string {
+	l := len(id)
+	return path.Join(f.blobPath, id[l-2:l])
+}
+
+func (f *Manager) getBlobName(id string, checksum string) string {
+	return id + "==" + checksum
+}
+
 func (f *Manager) getBlobPath(id string, checksum string) string {
-	// TODO: shard the files, fs perf issue here
-	return path.Join(f.blobPath, id+"=="+checksum)
+	return path.Join(f.getBlobDir(id), f.getBlobName(id, checksum))
 }
