@@ -16,6 +16,7 @@ package metadata
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"strconv"
 	"sync"
@@ -76,10 +77,29 @@ func (m *MetaService) Close() error {
 	return m.db.Close()
 }
 
+func (m *MetaService) Get(id string) (*CachedDriveFile, error) {
+	files, err := m.listFiles(fmt.Sprintf(sqlGetByRemoteId, id))
+	if err != nil {
+		return nil, err
+	}
+	if files == nil || len(files) == 0 {
+		return nil, errors.New("file not found")
+	}
+	return files[0], nil
+}
+
 // Permanently saves a file/folder's metadata.
 func (m *MetaService) Save(parentId string, id string, data *CachedDriveFile, download bool, upload bool) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	if download {
+		// check if the content is changed
+		if file, err := m.Get(id); err == nil {
+			// ignore error cases
+			download = data.Md5Checksum != file.Md5Checksum
+		}
+	}
 
 	logger.V("Caching metadata for", id)
 	return m.upsertFile(data, download, upload)
@@ -93,9 +113,9 @@ func (m *MetaService) Delete(id string) (err error) {
 	return m.deleteFile(id)
 }
 
-func (m *MetaService) ListDownloads(limit int64) ([]*CachedDriveFile, error) {
+func (m *MetaService) ListDownloads(limit int64, min int64, max int64) ([]*CachedDriveFile, error) {
 	// TODO: order by lastMod
-	return m.listFiles(fmt.Sprintf(sqlListDownloads, limit))
+	return m.listFiles(fmt.Sprintf(sqlListDownloads, min, max, limit))
 }
 
 // Looks up for files under parentId, named with name.

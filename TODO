@@ -1,10 +1,10 @@
-* Avoid redownloads if content hasnt changed (on metadata only changes).
 * Better error handling on downloads.
-* Handle remote directory deletions.
+* Introduce garbage collector for blob deletions
+* Unmount on SIGTERM
 * Handle local mv/renames, additions, modifications and deletions, switch to traverse syncer.
 * Auth wizard.
 * Handle merge conflicts.
-* Introduce an additional download queue for large files, not to be blocked by large blobs during download.
 * Handle more metadata such as lastMod.
 * Show sync status, maybe an info service on port XXXXX.
 * Adaptive sync scheduling.
+* Overview code for possible deadlocks.

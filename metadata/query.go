@@ -21,9 +21,10 @@ import (
 )
 
 const (
+	sqlGetByRemoteId = "select remoteId, parentId, name, mimetype, size, md5checksum, lastMod from files where remoteId = '%s'"
 	sqlLookup        = "select remoteId, parentId, name, mimetype, size, md5checksum, lastMod from files where parentId = '%s' and name = '%s' and (inited = 1 or mimetype = 'application/vnd.google-apps.folder')"
 	sqlChildren      = "select remoteId, parentId, name, mimetype, size, md5checksum, lastMod from files where parentId = '%s' and (inited = 1 or mimetype = 'application/vnd.google-apps.folder')"
-	sqlListDownloads = "select remoteId, parentId, name, mimetype, size, md5checksum, lastMod from files where download = 1 limit %d"
+	sqlListDownloads = "select remoteId, parentId, name, mimetype, size, md5checksum, lastMod from files where download = 1 and size >= %d and size <= %d limit %d"
 	sqlUpsert        = "insert or replace into files (remoteId, parentId, name, mimetype, size, md5checksum, lastMod, download, upload) values(?, ?, ?, ?, ?, ?, ?, ?, ?)"
 	sqlDelete        = "delete from files where remoteId = '%s'"
 	sqlSetInited     = "update files set inited = 1 where remoteId = ?"
