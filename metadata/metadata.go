@@ -93,9 +93,9 @@ func (m *MetaService) Delete(id string) (err error) {
 	return m.deleteFile(id)
 }
 
-func (m *MetaService) ListDownloads(limit int64) ([]*CachedDriveFile, error) {
+func (m *MetaService) ListDownloads(limit int64, min int64, max int64) ([]*CachedDriveFile, error) {
 	// TODO: order by lastMod
-	return m.listFiles(fmt.Sprintf(sqlListDownloads, limit))
+	return m.listFiles(fmt.Sprintf(sqlListDownloads, min, max, limit))
 }
 
 // Looks up for files under parentId, named with name.

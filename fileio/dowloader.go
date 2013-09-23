@@ -15,6 +15,7 @@
 package fileio
 
 import (
+	"math"
 	"net/http"
 	"sync"
 	"time"
@@ -25,8 +26,9 @@ import (
 )
 
 const (
-	IntervalDownloadTicker         = 5 * time.Second // TODO(burcud): need to be adaptive
-	MaxNumberOfConcurrentDownloads = 10
+	IntervalTick                           = 5 * time.Second // TODO(burcud): need to be adaptive
+	MaxNumberOfConcurrentDownloadsPerQueue = 5
+	MaxSizeQueueTreshold                   = 1 << 20 // TODO(burcud): need to be adaptive
 
 	BaseUrlDownloadHost = "https://googledrive.com/host"
 )
@@ -36,7 +38,8 @@ type Downloader struct {
 	metaService *metadata.MetaService
 	blobMngr    *blob.Manager
 
-	mu sync.Mutex
+	muSmall sync.Mutex
+	muLarge sync.Mutex
 }
 
 func NewDownloader(client *http.Client, m *metadata.MetaService, blobMngr *blob.Manager) *Downloader {
@@ -52,19 +55,35 @@ func NewDownloader(client *http.Client, m *metadata.MetaService, blobMngr *blob.
 func (d *Downloader) Start() {
 	go func() {
 		for {
-			d.tick()
-			<-time.After(IntervalDownloadTicker)
+			d.tickForSmall()
+			<-time.After(IntervalTick)
+		}
+	}()
+	go func() {
+		for {
+			d.tickForLarge()
+			<-time.After(IntervalTick)
 		}
 	}()
 }
 
-func (d *Downloader) tick() {
-	d.mu.Lock()
-	defer d.mu.Unlock()
+func (d *Downloader) tickForSmall() {
+	d.muSmall.Lock()
+	defer d.muSmall.Unlock()
+	d.tick(0, MaxSizeQueueTreshold)
+}
+
+func (d *Downloader) tickForLarge() {
+	d.muLarge.Lock()
+	defer d.muLarge.Unlock()
+	d.tick(MaxSizeQueueTreshold+1, math.MaxInt64)
+}
+
+func (d *Downloader) tick(minSize int64, maxSize int64) {
 	// TODO: add an additional queue for small sized files
 	// so that, large files dont block the download queue.
 	// retrieve at least MaxNumberOfConcurrentDownloads files to download
-	downloads, _ := d.metaService.ListDownloads(MaxNumberOfConcurrentDownloads)
+	downloads, _ := d.metaService.ListDownloads(MaxNumberOfConcurrentDownloadsPerQueue, minSize, maxSize)
 	if len(downloads) == 0 {
 		return
 	}
