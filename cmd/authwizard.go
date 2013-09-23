@@ -16,6 +16,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/rakyll/drivefuse/auth"
 	"github.com/rakyll/drivefuse/config"
@@ -29,57 +30,49 @@ const (
     messageAddAccount = "Add an account."
 )
 
-var ClientIdQuestion = &Question{
+var clientIdQuestion = &question{
 	"client_id",
 	"OAuth 2.0 Client ID",
 	"943748168841.apps.googleusercontent.com",
 }
 
-var ClientSecretQuestion = &Question{
+var clientSecretQuestion = &question{
 	"client_secret",
 	"OAuth 2.0 Client Secret",
 	"iy1Cbc7CjshE2VqYQ0OfWGxt",
 }
 
-var AccountNameQuestion = &Question{
+var accountNameQuestion = &question{
 	"account_name",
 	"Name for this account.",
 	"default_account",
 }
 
-var RemoteIdQuestion = &Question{
+var remoteIdQuestion = &question{
 	"remote_id",
 	"Remote folder ID to sync with, L for list.",
 	"root",
 }
 
-var AuthorizationCodeQuestion = &Question{
+var authorizationCodeQuestion = &question{
 	"auth_code",
 	"OAuth 2.0 authorization code.",
 	"",
 }
 
-var LocalPathQuestion = &Question{
+var localPathQuestion = &question{
 	"local_path",
 	"Local path to sync from.",
 	config.DefaultMountpoint(),
 }
 
-func Bold(str string) string {
-	return "\033[1m" + str + "\033[0m"
-}
-
-func Blue(str string) string {
-	return Bold("\033[34m" + str + "\033[0m")
-}
-
-type Question struct {
+type question struct {
 	Name    string
 	Usage   string
 	Default string
 }
 
-func readQuestion(opt *Question) string {
+func readQuestion(opt *question) string {
 	var s string
 	for s == "" {
 		fmt.Printf("%v %v [default=%v]>> ", opt.Usage, Bold(opt.Name), Blue(opt.Default))
@@ -115,7 +108,7 @@ func retrieveRefreshToken(act *config.Account) string {
 	url := tr.Config.AuthCodeURL("")
 	fmt.Println("Visit this URL to get an authorization code.")
 	fmt.Println(url)
-	code := readQuestion(AuthorizationCodeQuestion)
+	code := readQuestion(authorizationCodeQuestion)
 	token, err := tr.Exchange(code)
 	if err != nil {
 		logger.F("Failed to exchange authorization code.", err)
@@ -125,13 +118,13 @@ func retrieveRefreshToken(act *config.Account) string {
 
 func readAccount() *config.Account {
 	cfg := &config.Account{
-		LocalPath:    readQuestion(LocalPathQuestion),
-		ClientId:     readQuestion(ClientIdQuestion),
-		ClientSecret: readQuestion(ClientSecretQuestion),
+		LocalPath:    readQuestion(localPathQuestion),
+		ClientId:     readQuestion(clientIdQuestion),
+		ClientSecret: readQuestion(clientSecretQuestion),
 	}
 	cfg.RefreshToken = retrieveRefreshToken(cfg)
 	for cfg.RemoteId == "" {
-		rid := readQuestion(RemoteIdQuestion)
+		rid := readQuestion(remoteIdQuestion)
 		if rid == "L" {
 			listFolders(auth.NewTransport(cfg))
 		} else {
@@ -145,6 +138,8 @@ func readConfig(dataDir string) *config.Config {
 	return &config.Config{DataDir: dataDir, Accounts: []*config.Account{readAccount()}}
 }
 
+// Run the authorization wizard, generating a config file in the given data
+// directory.
 func RunAuthWizard(dataDir string) {
 	fmt.Println(messageWelcome)
 	fmt.Println(messageAddAccount)
@@ -153,10 +148,9 @@ func RunAuthWizard(dataDir string) {
 	if err != nil {
 		logger.F(err)
 	}
-	j, err := cfg.Json()
+	err = cfg.Write(os.Stdout)
 	if err != nil {
 		logger.F(err)
 	}
-	fmt.Println(string(j))
-	fmt.Println("Config written to", cfg.ConfigPath())
+	fmt.Println("\nConfig written to", cfg.ConfigPath())
 }

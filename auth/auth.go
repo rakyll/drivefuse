@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package auth contains common Authorization functionality.
 package auth
 
 import (
@@ -23,10 +24,17 @@ import (
 )
 
 const (
+	// Google OAuth 2.0 service URLs
 	GoogleOAuth2AuthURL  string = "https://accounts.google.com/o/oauth2/auth"
 	GoogleOAuth2TokenURL string = "https://accounts.google.com/o/oauth2/token"
+
+	// OAuth 2.0 OOB redirect URL for authorization.
 	RedirectURL          string = "urn:ietf:wg:oauth:2.0:oob"
+
+	// OAuth 2.0 full Drive scope used for authorization.
 	DriveScope           string = "https://www.googleapis.com/auth/drive"
+
+	// OAuth 2.0 access type for offline/refresh access.
 	AccessType           string = "offline"
 )
 
@@ -42,6 +50,8 @@ func newConfig(cfg *config.Account) *oauth.Config {
 	}
 }
 
+// NewTransport creates a Transport for a given account, suitable for use by
+// API clients.
 func NewTransport(cfg *config.Account) *oauth.Transport {
 	return &oauth.Transport{
 		Config:    newConfig(cfg),

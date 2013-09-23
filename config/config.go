@@ -12,32 +12,42 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package config provides configuration management, loading/saving and
+// handling.
 package config
 
 import (
 	"encoding/json"
 	"io"
 	"os"
-  "os/user"
-  "path/filepath"
+	"os/user"
+	"path/filepath"
 
 	"github.com/rakyll/drivefuse/logger"
 )
 
 const (
+	// Name of the configuration file.
 	configName = "config.json"
-	metaName   = "meta.sql"
-	blobName   = "blob"
+
+	// Name of the metadata database file.
+	metaName = "meta.sql"
+
+	// Name of the blob directory.
+	blobName = "blob"
 )
 
+// DefaultMountpoint gets the default local path to mount to for a user.
 func DefaultMountpoint() string {
 	return HomeDir("google-drive")
 }
 
+// DefaultDataDir gets the default data directory for a user.
 func DefaultDataDir() string {
 	return HomeDir(".drived")
 }
 
+// HomeDir generates a joined path relative to the user's home directory.
 func HomeDir(path ...string) string {
 	usr, err := user.Current()
 	if err != nil {
@@ -47,32 +57,50 @@ func HomeDir(path ...string) string {
 	return filepath.Join(path...)
 }
 
+// Account is the configuration of a single account.
 type Account struct {
-	LocalPath    string `json:"local_path"`
-	RemoteId     string `json:"remote_id"`
-	ClientId     string `json:"client_id"`
+
+	// Local path where a Drive directory will be mounted.
+	LocalPath string `json:"local_path"`
+
+	// File ID of the remote folder to be synced.
+	RemoteId string `json:"remote_id"`
+
+	// OAuth 2.0 Client ID for authorization and token refreshing.
+	ClientId string `json:"client_id"`
+
+	// OAuth 2.0 Client ID for authorization and token refreshing.
 	ClientSecret string `json:"client_secret"`
+
+	// OAuth 2.0 refresh token.
 	RefreshToken string `json:"refresh_token"`
 }
 
+// Config contains the configuration for the running app.
 type Config struct {
-  DataDir string `json:"-"` // omits from json marshal/unmarshal
+
+	// Base data directory
+	DataDir string `json:"-"` // Omits from json marshal/unmarshal.
+
+	// Accounts are the configured accounts.
 	Accounts []*Account `json:"accounts"`
 }
 
+// NewConfig creates a new configuration in a given directory.
 func NewConfig(dataDir string) *Config {
-  if dataDir == "" {
-    dataDir = DefaultDataDir()
-  }
-  logger.D("Data directory is", dataDir)
-  return &Config{DataDir: dataDir}
+	if dataDir == "" {
+		dataDir = DefaultDataDir()
+	}
+	logger.D("Data directory is", dataDir)
+	return &Config{DataDir: dataDir}
 }
 
 // Setup initial config requirements - only need some directories for now.
 func (c *Config) Setup() error {
-  return os.MkdirAll(c.BlobPath(), 0750)
+	return os.MkdirAll(c.BlobPath(), 0750)
 }
 
+// Save a config file to the configured location in the data directory.
 func (c *Config) Save() error {
 	f, err := os.Create(c.ConfigPath())
 	if err != nil {
@@ -82,12 +110,14 @@ func (c *Config) Save() error {
 	return c.Write(f)
 }
 
-func (c *Config) Json() ([]byte, error) {
+// Marshal the configuration to JSON.
+func (c *Config) Marshal() ([]byte, error) {
 	return json.MarshalIndent(c, "", "  ")
 }
 
+// Write the configuration as JSON.
 func (c *Config) Write(w io.Writer) error {
-	bs, err := c.Json()
+	bs, err := c.Marshal()
 	if err != nil {
 		return err
 	}
@@ -98,6 +128,7 @@ func (c *Config) Write(w io.Writer) error {
 	return nil
 }
 
+// Load the configuration from the configured location in the data directory.
 func (c *Config) Load() error {
 	f, err := os.Open(c.ConfigPath())
 	if err != nil {
@@ -107,6 +138,7 @@ func (c *Config) Load() error {
 	return c.Read(f)
 }
 
+// Read the configuration from JSON.
 func (c *Config) Read(r io.Reader) error {
 	return json.NewDecoder(r).Decode(c)
 }
@@ -116,19 +148,23 @@ func (c *Config) FirstAccount() *Account {
 	return c.Accounts[0]
 }
 
+// DataPath generates a path relative to the data directory.
 func (c *Config) DataPath(path ...string) string {
 	path = append([]string{c.DataDir}, path...)
 	return filepath.Join(path...)
 }
 
+// ConfigPath is the path to the config file inside the data directory.
 func (c *Config) ConfigPath() string {
 	return c.DataPath(configName)
 }
 
+// BlobPath is the path to the blob directory in the data directory.
 func (c *Config) BlobPath() string {
 	return c.DataPath(blobName)
 }
 
+// Metadata path is the path to the metadata database in the data directory.
 func (c *Config) MetadataPath() string {
 	return c.DataPath(metaName)
 }

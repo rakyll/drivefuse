@@ -32,8 +32,8 @@ import (
 )
 
 var (
-	flagDataPath   = flag.String("datapath", "", "path of the data directory")
-	flagMountPoint = flag.String("mountpoint", "", "mount point")
+	flagDataDir   = flag.String("datadir", config.DefaultDataDir(), "path of the data directory")
+	flagMountPoint = flag.String("mountpoint", config.DefaultMountpoint(), "mount point")
 	flagBlockSync  = flag.Bool("blocksync", false, "set true to force blocking sync on startup")
 
 	flagRunAuthWizard = flag.Bool("wizard", false, "Run the startup wizard.")
@@ -47,11 +47,11 @@ func main() {
 	flag.Parse()
 
 	if *flagRunAuthWizard {
-		cmd.RunAuthWizard(*flagDataPath)
+		cmd.RunAuthWizard(*flagDataDir)
 		os.Exit(0)
 	}
 
-	cfg := config.NewConfig(*flagDataPath)
+	cfg := config.NewConfig(*flagDataDir)
   err := cfg.Setup()
 	if err != nil {
 		logger.F("Error initializing configuration.", err)
