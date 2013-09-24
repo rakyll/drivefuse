@@ -18,6 +18,7 @@ package config
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"os"
 	"os/user"
@@ -76,6 +77,15 @@ type Account struct {
 	RefreshToken string `json:"refresh_token"`
 }
 
+// Validate tests whether all required fields are present.
+func (a *Account) Validate() bool {
+	return a.LocalPath != "" &&
+		a.RemoteId != "" &&
+		a.ClientId != "" &&
+		a.ClientSecret != "" &&
+		a.RefreshToken != ""
+}
+
 // Config contains the configuration for the running app.
 type Config struct {
 
@@ -93,6 +103,19 @@ func NewConfig(dataDir string) *Config {
 	}
 	logger.D("Data directory is", dataDir)
 	return &Config{DataDir: dataDir}
+}
+
+// Validate validates the configuration
+func (c *Config) Validate() bool {
+	if len(c.Accounts) == 0 {
+		return false
+	}
+	for _, a := range c.Accounts {
+		if !a.Validate() {
+			return false
+		}
+	}
+	return true
 }
 
 // Setup initial config requirements - only need some directories for now.
@@ -135,7 +158,15 @@ func (c *Config) Load() error {
 		return err
 	}
 	defer f.Close()
-	return c.Read(f)
+	err = c.Read(f)
+	if err != nil {
+		return err
+	}
+	valid := c.Validate()
+	if !valid {
+		return errors.New("Invalid config.")
+	}
+	return nil
 }
 
 // Read the configuration from JSON.
