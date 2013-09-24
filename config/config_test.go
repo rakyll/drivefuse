@@ -16,39 +16,48 @@
 package config
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
+
+  T "github.com/rakyll/drivefuse/third_party/launchpad.net/gocheck"
 )
 
-type configTestVars struct {
-	T *testing.T
-	DataDir string
+// Create the test suite
+type ConfigSuite struct {
+  dataDir string
 }
 
-func newDataDir(t *testing.T) string {
-	name, err := ioutil.TempDir("/tmp", "drived-config-text")
-	if err != nil {
-		t.Error(err)
-	}
-	return name
+func (s *ConfigSuite) SetUpTest(c *T.C) {
+  s.dataDir = c.MkDir()
 }
 
-func setup(t *testing.T) *configTestVars {
-	dataDir := newDataDir(t)
-	return &configTestVars{
-		T: t,
-		DataDir: dataDir,
-	}
+// Hook up gocheck into the "go test" runner.
+func Test(t *testing.T) {
+  T.Suite(&ConfigSuite{})
+  T.TestingT(t)
 }
 
-func tearDown(v *configTestVars) {
-	err := os.RemoveAll(v.DataDir)
-	if err != nil {
-		v.T.Error(err)
-	}
+type fileExistsChecker struct {
+   *T.CheckerInfo
 }
+
+func (checker *fileExistsChecker) Check(params []interface{}, names []string) (bool, string) {
+	_, err := os.Stat(params[0].(string))
+  if err != nil {
+		if os.IsNotExist(err) {
+		  return false, "File does not exist."
+		} else {
+			return false, err.Error()
+		}
+	}
+  return true, ""
+}
+
+var fileExists T.Checker = &fileExistsChecker{
+	&T.CheckerInfo{Name: "FileExists", Params: []string{"path"}},
+}
+
 
 func failIfNotExist(t *testing.T, path string) {
 	if _, err := os.Stat(path); err != nil {
@@ -80,51 +89,40 @@ var testFile string = `
 }
 `
 
-func TestNewConfig(t *testing.T) {
-	v := setup(t)
-	defer tearDown(v)
-	cfg := NewConfig(v.DataDir)
-	failIfNotEqual(t, v.DataDir, cfg.DataDir)
+func (s *ConfigSuite) TestNewConfig(c *T.C) {
+	cfg := NewConfig(s.dataDir)
+	c.Assert(s.dataDir, T.Equals, cfg.DataDir)
 }
 
-
-func TestConfigSetup(t *testing.T) {
-	v := setup(t)
-	defer tearDown(v)
-	cfg := NewConfig(v.DataDir)
+func (s *ConfigSuite) TestConfigSetup(c *T.C) {
+	cfg := NewConfig(s.dataDir)
 	cfg.Setup()
-	failIfNotExist(t, filepath.Join(v.DataDir, blobName))
+	c.Assert(filepath.Join(s.dataDir, blobName), fileExists)
 }
 
-func TestConfigPath(t *testing.T) {
-	v := setup(t)
-	defer tearDown(v)
-	cfg := NewConfig(v.DataDir)
-	failIfNotEqual(t, filepath.Join(v.DataDir, configName), cfg.ConfigPath())
-
+func (s *ConfigSuite) TestConfigPath(c *T.C) {
+	cfg := NewConfig(s.dataDir)
+	c.Assert(filepath.Join(s.dataDir, configName), T.Equals, cfg.ConfigPath())
 }
 
-func TestConfigLoad(t *testing.T) {
-	v := setup(t)
-	defer tearDown(v)
-	cfg := NewConfig(v.DataDir)
+func (s *ConfigSuite) TestConfigLoad(c *T.C) {
+	cfg := NewConfig(s.dataDir)
 	cfg.Setup()
-	f, err := os.Create(filepath.Join(v.DataDir, configName))
+	f, err := os.Create(filepath.Join(s.dataDir, configName))
 	if err != nil {
-		t.Error(err)
+		c.Error(err)
 	}
 	f.WriteString(testFile)
 	cfg.Load()
-	failIfNotEqual(t, cfg.FirstAccount().ClientSecret, "iy1Cbc7CjshE2VqYQ0OfWGxt")
+	c.Assert("iy1Cbc7CjshE2VqYQ0OfWGxt", T.Equals, cfg.FirstAccount().ClientSecret)
 	// Let's just say json unmarshalling works
 }
 
-func TestDataDirPath(t *testing.T) {
-	v := setup(t)
-	cfg := NewConfig(v.DataDir)
-	defer tearDown(v)
-	failIfNotEqual(t, filepath.Join(v.DataDir, configName), cfg.ConfigPath())
+func (s *ConfigSuite) TestDataDirPath(c *T.C) {
+	cfg := NewConfig(s.dataDir)
+  c.Assert(filepath.Join(s.dataDir, configName), T.Equals, cfg.ConfigPath())
 }
 
-func TestFailing(t *testing.T) {
+func (s *ConfigSuite) TestFailing(c *T.C) {
+  c.Error(1)
 }
