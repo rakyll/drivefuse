@@ -63,7 +63,7 @@ func main() {
 
 	err = cfg.Load()
 	shutdownChan := make(chan io.Closer, 1)
-	go gracefullyShutDown(shutdownChan)
+	go gracefulShutDown(shutdownChan)
 
 	if err != nil {
 		logger.F("Did you mean --wizard? Error reading configuration.", err)
