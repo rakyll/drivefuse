@@ -46,7 +46,7 @@ func main() {
 	flag.Parse()
 
 	shutdownChan := make(chan io.Closer, 1)
-	go gracefullyShutDown(shutdownChan)
+	go gracefulShutDown(shutdownChan)
 
 	cfg, err := config.New(*flagDataPath)
 	if err != nil {
