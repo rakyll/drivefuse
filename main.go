@@ -46,16 +46,17 @@ var (
 func main() {
 	flag.Parse()
 
-	if *flagRunAuthWizard {
-		cmd.RunAuthWizard(*flagDataDir)
-		os.Exit(0)
-	}
-
 	cfg := config.NewConfig(*flagDataDir)
 	err := cfg.Setup()
 	if err != nil {
 		logger.F("Error initializing configuration.", err)
 	}
+
+	if *flagRunAuthWizard {
+		cmd.RunAuthWizard(cfg)
+		os.Exit(0)
+	}
+
 	err = cfg.Load()
 	if err != nil {
 		logger.F("Did you mean --wizard? Error reading configuration.", err)

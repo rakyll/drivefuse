@@ -135,20 +135,22 @@ func readAccount() *config.Account {
 	return cfg
 }
 
-func readConfig(dataDir string) *config.Config {
-	return &config.Config{DataDir: dataDir, Accounts: []*config.Account{readAccount()}}
+func readConfig(cfg *config.Config) {
+	cfg.Accounts = []*config.Account{readAccount()}
 }
 
 // Run the authorization wizard, generating a config file in the given data
 // directory.
-func RunAuthWizard(dataDir string) {
+func RunAuthWizard(cfg *config.Config) {
 	fmt.Println(messageWelcome)
 	fmt.Println(messageAddAccount)
-	cfg := readConfig(dataDir)
+	// readConfig will fail loudly by itself, it doesn't return an error
+	readConfig(cfg)
 	err := cfg.Save()
 	if err != nil {
 		logger.F(err)
 	}
+	// Now display the new config to the user.
 	err = cfg.Write(os.Stdout)
 	if err != nil {
 		logger.F(err)
