@@ -75,7 +75,7 @@ func failIfNotEqual(t *testing.T, a interface{}, b interface{}) {
 	}
 }
 
-var testFile string = `
+var testGoodFile string = `
 {
   "accounts": [
     {
@@ -88,6 +88,27 @@ var testFile string = `
   ]
 }
 `
+
+var testMissingAccountAttribute string = `
+{
+  "accounts": [
+    {
+      "remote_id": "root",
+      "client_id": "943748168841.apps.googleusercontent.com",
+      "client_secret": "iy1Cbc7CjshE2VqYQ0OfWGxt",
+      "refresh_token": "1/Hm2qp_5zZxhMH8mIo1-XGE24f_XtL3-PdV749nHzz6Q"
+    }
+  ]
+}
+`
+
+var testNoAccountsFile string = `
+{
+  "accounts": []
+}
+`
+
+
 
 func (s *ConfigSuite) TestNewConfig(c *T.C) {
 	cfg := NewConfig(s.dataDir)
@@ -105,17 +126,41 @@ func (s *ConfigSuite) TestConfigPath(c *T.C) {
 	c.Assert(filepath.Join(s.dataDir, configName), T.Equals, cfg.ConfigPath())
 }
 
-func (s *ConfigSuite) TestConfigLoad(c *T.C) {
+func (s *ConfigSuite) TestGoodConfigLoad(c *T.C) {
 	cfg := NewConfig(s.dataDir)
 	cfg.Setup()
 	f, err := os.Create(filepath.Join(s.dataDir, configName))
 	if err != nil {
 		c.Error(err)
 	}
-	f.WriteString(testFile)
+	f.WriteString(testGoodFile)
 	cfg.Load()
 	c.Assert("iy1Cbc7CjshE2VqYQ0OfWGxt", T.Equals, cfg.FirstAccount().ClientSecret)
 	// Let's just say json unmarshalling works
+}
+
+func (s *ConfigSuite) TestMissingAccountField(c *T.C) {
+	cfg := NewConfig(s.dataDir)
+	cfg.Setup()
+	f, err := os.Create(filepath.Join(s.dataDir, configName))
+	if err != nil {
+		c.Error(err)
+	}
+	f.WriteString(testMissingAccountAttribute)
+	err = cfg.Load()
+  c.Assert(err, T.NotNil)
+}
+
+func (s *ConfigSuite) TestZeroAccounts(c *T.C) {
+	cfg := NewConfig(s.dataDir)
+	cfg.Setup()
+	f, err := os.Create(filepath.Join(s.dataDir, configName))
+	if err != nil {
+		c.Error(err)
+	}
+	f.WriteString(testNoAccountsFile)
+	err = cfg.Load()
+  c.Assert(err, T.NotNil)
 }
 
 func (s *ConfigSuite) TestDataDirPath(c *T.C) {

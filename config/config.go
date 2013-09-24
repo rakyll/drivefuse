@@ -105,7 +105,7 @@ func NewConfig(dataDir string) *Config {
 	return &Config{DataDir: dataDir}
 }
 
-// Validate validates the configuration
+// Validate tests there is at least one account and all accounts are valid.
 func (c *Config) Validate() bool {
 	if len(c.Accounts) == 0 {
 		return false
