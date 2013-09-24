@@ -20,59 +20,42 @@ import (
 	"path/filepath"
 	"testing"
 
-  T "github.com/rakyll/drivefuse/third_party/launchpad.net/gocheck"
+	T "github.com/rakyll/drivefuse/third_party/launchpad.net/gocheck"
 )
 
 // Create the test suite
 type ConfigSuite struct {
-  dataDir string
+	dataDir string
 }
 
 func (s *ConfigSuite) SetUpTest(c *T.C) {
-  s.dataDir = c.MkDir()
+	s.dataDir = c.MkDir()
 }
 
 // Hook up gocheck into the "go test" runner.
 func Test(t *testing.T) {
-  T.Suite(&ConfigSuite{})
-  T.TestingT(t)
+	T.Suite(&ConfigSuite{})
+	T.TestingT(t)
 }
 
 type fileExistsChecker struct {
-   *T.CheckerInfo
+	*T.CheckerInfo
 }
 
 func (checker *fileExistsChecker) Check(params []interface{}, names []string) (bool, string) {
 	_, err := os.Stat(params[0].(string))
-  if err != nil {
+	if err != nil {
 		if os.IsNotExist(err) {
-		  return false, "File does not exist."
+			return false, "File does not exist."
 		} else {
 			return false, err.Error()
 		}
 	}
-  return true, ""
+	return true, ""
 }
 
 var fileExists T.Checker = &fileExistsChecker{
 	&T.CheckerInfo{Name: "FileExists", Params: []string{"path"}},
-}
-
-
-func failIfNotExist(t *testing.T, path string) {
-	if _, err := os.Stat(path); err != nil {
-		if os.IsNotExist(err) {
-			t.Errorf("Assert, does not exist (%v) %v", path, err)
-		} else {
-			t.Error(err)
-		}
-	}
-}
-
-func failIfNotEqual(t *testing.T, a interface{}, b interface{}) {
-	if a != b {
-		t.Errorf("Assert equal, expecting (%v) got (%v)", a, b)
-	}
 }
 
 var testGoodFile string = `
@@ -107,8 +90,6 @@ var testNoAccountsFile string = `
   "accounts": []
 }
 `
-
-
 
 func (s *ConfigSuite) TestNewConfig(c *T.C) {
 	cfg := NewConfig(s.dataDir)
@@ -148,7 +129,7 @@ func (s *ConfigSuite) TestMissingAccountField(c *T.C) {
 	}
 	f.WriteString(testMissingAccountAttribute)
 	err = cfg.Load()
-  c.Assert(err, T.NotNil)
+	c.Assert(err, T.NotNil)
 }
 
 func (s *ConfigSuite) TestZeroAccounts(c *T.C) {
@@ -160,14 +141,14 @@ func (s *ConfigSuite) TestZeroAccounts(c *T.C) {
 	}
 	f.WriteString(testNoAccountsFile)
 	err = cfg.Load()
-  c.Assert(err, T.NotNil)
+	c.Assert(err, T.NotNil)
 }
 
 func (s *ConfigSuite) TestDataDirPath(c *T.C) {
 	cfg := NewConfig(s.dataDir)
-  c.Assert(filepath.Join(s.dataDir, configName), T.Equals, cfg.ConfigPath())
+	c.Assert(filepath.Join(s.dataDir, configName), T.Equals, cfg.ConfigPath())
 }
 
 func (s *ConfigSuite) TestFailing(c *T.C) {
-  c.Error(1)
+	c.Error(1)
 }
