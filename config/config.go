@@ -12,112 +12,190 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package config provides configuration management, loading/saving and
+// handling.
 package config
 
 import (
 	"encoding/json"
-	"fmt"
-	"io/ioutil"
-	"net/http"
+	"errors"
+	"io"
 	"os"
 	"os/user"
-	"path"
-	"time"
+	"path/filepath"
 
 	"github.com/rakyll/drivefuse/logger"
-	"github.com/rakyll/drivefuse/third_party/code.google.com/p/goauth2/oauth"
 )
 
 const (
-	GoogleOAuth2AuthURL  = "https://accounts.google.com/o/oauth2/auth"
-	GoogleOAuth2TokenURL = "https://accounts.google.com/o/oauth2/token"
+	// Name of the configuration file.
+	configName = "config.json"
+
+	// Name of the metadata database file.
+	metaName = "meta.sql"
+
+	// Name of the blob directory.
+	blobName = "blob"
 )
 
-type credentialsType struct {
-	ClientId     string `json:"client_id"`
+// DefaultMountpoint gets the default local path to mount to for a user.
+func DefaultMountpoint() string {
+	return HomeDir("google-drive")
+}
+
+// DefaultDataDir gets the default data directory for a user.
+func DefaultDataDir() string {
+	return HomeDir(".drived")
+}
+
+// HomeDir generates a joined path relative to the user's home directory.
+func HomeDir(path ...string) string {
+	usr, err := user.Current()
+	if err != nil {
+		return ""
+	}
+	path = append([]string{usr.HomeDir}, path...)
+	return filepath.Join(path...)
+}
+
+// Account is the configuration of a single account.
+type Account struct {
+
+	// Local path where a Drive directory will be mounted.
+	LocalPath string `json:"local_path"`
+
+	// File ID of the remote folder to be synced.
+	RemoteId string `json:"remote_id"`
+
+	// OAuth 2.0 Client ID for authorization and token refreshing.
+	ClientId string `json:"client_id"`
+
+	// OAuth 2.0 Client ID for authorization and token refreshing.
 	ClientSecret string `json:"client_secret"`
+
+	// OAuth 2.0 refresh token.
 	RefreshToken string `json:"refresh_token"`
 }
 
-type configType struct {
-	Credentials credentialsType
-	BlobPath    string `json:"blob_path,omitempty"`
-	MountPath   string `json:"mount_path,omitempty"`
+// Validate tests whether all required fields are present.
+func (a *Account) Validate() bool {
+	return a.LocalPath != "" &&
+		a.RemoteId != "" &&
+		a.ClientId != "" &&
+		a.ClientSecret != "" &&
+		a.RefreshToken != ""
 }
 
+// Config contains the configuration for the running app.
 type Config struct {
-	path string
-	cfg  *configType
+
+	// Base data directory
+	DataDir string `json:"-"` // Omits from json marshal/unmarshal.
+
+	// Accounts are the configured accounts.
+	Accounts []*Account `json:"accounts"`
 }
 
-func New(path string) (*Config, error) {
-	if path == "" {
-		usr, err := user.Current()
-		if err != nil {
-			return nil, err
+// NewConfig creates a new configuration in a given directory.
+func NewConfig(dataDir string) *Config {
+	if dataDir == "" {
+		dataDir = DefaultDataDir()
+	}
+	logger.D("Data directory is", dataDir)
+	return &Config{DataDir: dataDir}
+}
+
+// Validate tests there is at least one account and all accounts are valid.
+func (c *Config) Validate() bool {
+	if len(c.Accounts) == 0 {
+		return false
+	}
+	for _, a := range c.Accounts {
+		if !a.Validate() {
+			return false
 		}
-		path = fmt.Sprintf("%s%c%s", usr.HomeDir, os.PathSeparator, ".googledrive")
 	}
-	c := &Config{path: path}
-	c.setup()
-	// read and unmarshall configuration file
-	if err := c.readFromFile(); err != nil {
-		return nil, err
-	}
-	return c, nil
+	return true
 }
 
-// TODO(burcu): Doesn't belong to this package, move somewhere else
-func (c *Config) GetDefaultTransport() *oauth.Transport {
-	oauthConf := &oauth.Config{
-		ClientId:     c.cfg.Credentials.ClientId,
-		ClientSecret: c.cfg.Credentials.ClientSecret,
-		AuthURL:      GoogleOAuth2AuthURL,
-		TokenURL:     GoogleOAuth2TokenURL,
+// Setup initial config requirements - only need some directories for now.
+func (c *Config) Setup() error {
+	return os.MkdirAll(c.BlobPath(), 0750)
+}
+
+// Save a config file to the configured location in the data directory.
+func (c *Config) Save() error {
+	f, err := os.Create(c.ConfigPath())
+	if err != nil {
+		return err
 	}
-	// force refreshes the access token on start, make sure
-	// refresh request in parallel are being started
-	return &oauth.Transport{
-		Token:     &oauth.Token{RefreshToken: c.cfg.Credentials.RefreshToken, Expiry: time.Now()},
-		Config:    oauthConf,
-		Transport: http.DefaultTransport,
+	defer f.Close()
+	return c.Write(f)
+}
+
+// Marshal the configuration to JSON.
+func (c *Config) Marshal() ([]byte, error) {
+	return json.MarshalIndent(c, "", "  ")
+}
+
+// Write the configuration as JSON.
+func (c *Config) Write(w io.Writer) error {
+	bs, err := c.Marshal()
+	if err != nil {
+		return err
 	}
-}
-
-func (c *Config) GetConfigPath() string {
-	return path.Join(c.path, "config.json")
-}
-
-func (c *Config) GetMetadataPath() string {
-	return path.Join(c.path, "meta.sql")
-}
-
-func (c *Config) GetBlobPath() string {
-	if c.cfg != nil && c.cfg.BlobPath != "" {
-		return c.cfg.BlobPath
+	_, err = w.Write(bs)
+	if err != nil {
+		return err
 	}
-	return path.Join(c.path, "blob")
-}
-
-func (c *Config) GetMountPoint() string {
-	return c.cfg.MountPath
-}
-
-func (c *Config) setup() error {
-	// TODO(burcud): Initialize with a sample config.
-	return os.MkdirAll(c.GetBlobPath(), 0750)
-}
-
-func (c *Config) readFromFile() (err error) {
-	logger.V("Reading configuration file...")
-	var content []byte
-	if content, err = ioutil.ReadFile(c.GetConfigPath()); err != nil {
-		return
-	}
-	var cfg configType
-	if err = json.Unmarshal(content, &cfg); err != nil {
-		return
-	}
-	c.cfg = &cfg
 	return nil
+}
+
+// Load the configuration from the configured location in the data directory.
+func (c *Config) Load() error {
+	f, err := os.Open(c.ConfigPath())
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	err = c.Read(f)
+	if err != nil {
+		return err
+	}
+	valid := c.Validate()
+	if !valid {
+		return errors.New("Invalid config.")
+	}
+	return nil
+}
+
+// Read the configuration from JSON.
+func (c *Config) Read(r io.Reader) error {
+	return json.NewDecoder(r).Decode(c)
+}
+
+// Hack while we only support one account
+func (c *Config) FirstAccount() *Account {
+	return c.Accounts[0]
+}
+
+// DataPath generates a path relative to the data directory.
+func (c *Config) DataPath(path ...string) string {
+	path = append([]string{c.DataDir}, path...)
+	return filepath.Join(path...)
+}
+
+// ConfigPath is the path to the config file inside the data directory.
+func (c *Config) ConfigPath() string {
+	return c.DataPath(configName)
+}
+
+// BlobPath is the path to the blob directory in the data directory.
+func (c *Config) BlobPath() string {
+	return c.DataPath(blobName)
+}
+
+// Metadata path is the path to the metadata database in the data directory.
+func (c *Config) MetadataPath() string {
+	return c.DataPath(metaName)
 }
