@@ -66,13 +66,6 @@ func failIfNotEqual(t *testing.T, a interface{}, b interface{}) {
 	}
 }
 
-func TestNewConfig(t *testing.T) {
-	v := setup(t)
-	defer tearDown(v)
-	cfg := NewConfig(v.DataDir)
-	failIfNotEqual(t, v.DataDir, cfg.DataDir)
-}
-
 var testFile string = `
 {
   "accounts": [
@@ -87,12 +80,28 @@ var testFile string = `
 }
 `
 
+func TestNewConfig(t *testing.T) {
+	v := setup(t)
+	defer tearDown(v)
+	cfg := NewConfig(v.DataDir)
+	failIfNotEqual(t, v.DataDir, cfg.DataDir)
+}
+
+
 func TestConfigSetup(t *testing.T) {
 	v := setup(t)
 	defer tearDown(v)
 	cfg := NewConfig(v.DataDir)
 	cfg.Setup()
 	failIfNotExist(t, filepath.Join(v.DataDir, blobName))
+}
+
+func TestConfigPath(t *testing.T) {
+	v := setup(t)
+	defer tearDown(v)
+	cfg := NewConfig(v.DataDir)
+	failIfNotEqual(t, filepath.Join(v.DataDir, configName), cfg.ConfigPath())
+
 }
 
 func TestConfigLoad(t *testing.T) {
@@ -107,6 +116,7 @@ func TestConfigLoad(t *testing.T) {
 	f.WriteString(testFile)
 	cfg.Load()
 	failIfNotEqual(t, cfg.FirstAccount().ClientSecret, "iy1Cbc7CjshE2VqYQ0OfWGxt")
+	// Let's just say json unmarshalling works
 }
 
 func TestDataDirPath(t *testing.T) {
