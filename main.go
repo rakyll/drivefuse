@@ -62,8 +62,6 @@ func main() {
 	}
 
 	err = cfg.Load()
-	shutdownChan := make(chan io.Closer, 1)
-	go gracefulShutDown(shutdownChan)
 
 	if err != nil {
 		logger.F("Did you mean --wizard? Error reading configuration.", err)
@@ -92,16 +90,20 @@ func main() {
 
 	logger.V("mounting...")
 	mountpoint := cfg.FirstAccount().LocalPath
+	// TODO: Better error checking here. All sorts of things like stale
+	// mounts will surface at this moment.
 	err = os.MkdirAll(mountpoint, 0774)
 	if err != nil {
 		logger.F(err)
 	}
+	shutdownChan := make(chan io.Closer, 1)
+	go gracefulShutDown(shutdownChan, mountpoint)
 	if err = mount.MountAndServe(mountpoint, metaService, blobManager, downloader); err != nil {
 		logger.F(err)
 	}
 }
 
-func gracefulShutDown(shutdownc <-chan io.Closer) {
+func gracefulShutDown(shutdownc <-chan io.Closer, mountpoint string) {
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, syscall.SIGHUP)
 	signal.Notify(c, syscall.SIGINT)
@@ -115,7 +117,7 @@ func gracefulShutDown(shutdownc <-chan io.Closer) {
 		switch sig {
 		case syscall.SIGINT:
 			logger.V("Gracefully shutting down...")
-			mount.Umount(*flagMountPoint)
+			mount.Umount(mountpoint)
 			// TODO(burcud): Handle Umount errors
 			go func() {
 				<-time.After(3 * time.Second)
