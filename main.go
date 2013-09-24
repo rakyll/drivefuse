@@ -22,20 +22,25 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/rakyll/drivefuse/auth"
 	"github.com/rakyll/drivefuse/blob"
+	"github.com/rakyll/drivefuse/cmd"
 	"github.com/rakyll/drivefuse/config"
 	"github.com/rakyll/drivefuse/fileio"
 	"github.com/rakyll/drivefuse/logger"
 	"github.com/rakyll/drivefuse/metadata"
 	"github.com/rakyll/drivefuse/mount"
 	"github.com/rakyll/drivefuse/syncer"
+
 	client "github.com/rakyll/drivefuse/third_party/code.google.com/p/google-api-go-client/drive/v2"
 )
 
 var (
-	flagDataPath   = flag.String("datapath", "", "path of the data directory")
-	flagMountPoint = flag.String("mountpoint", "", "mount point")
+	flagDataDir    = flag.String("datadir", config.DefaultDataDir(), "path of the data directory")
+	flagMountPoint = flag.String("mountpoint", config.DefaultMountpoint(), "mount point")
 	flagBlockSync  = flag.Bool("blocksync", false, "set true to force blocking sync on startup")
+
+	flagRunAuthWizard = flag.Bool("wizard", false, "Run the startup wizard.")
 
 	metaService  *metadata.MetaService
 	driveService *client.Service
@@ -45,19 +50,28 @@ var (
 func main() {
 	flag.Parse()
 
-	shutdownChan := make(chan io.Closer, 1)
-	go gracefulShutDown(shutdownChan)
-
-	cfg, err := config.New(*flagDataPath)
+	cfg := config.NewConfig(*flagDataDir)
+	err := cfg.Setup()
 	if err != nil {
-		logger.F("Error while reading and initializing configuration:", err)
+		logger.F("Error initializing configuration.", err)
 	}
 
-	transport := cfg.GetDefaultTransport()
+	if *flagRunAuthWizard {
+		cmd.RunAuthWizard(cfg)
+		os.Exit(0)
+	}
 
-	metaService, _ = metadata.New(cfg.GetMetadataPath())
+	err = cfg.Load()
+
+	if err != nil {
+		logger.F("Did you mean --wizard? Error reading configuration.", err)
+	}
+
+	transport := auth.NewTransport(cfg.FirstAccount())
+
+	metaService, _ = metadata.New(cfg.MetadataPath())
 	driveService, _ = client.New(transport.Client())
-	blobManager = blob.New(cfg.GetBlobPath())
+	blobManager = blob.New(cfg.BlobPath())
 
 	downloader := fileio.NewDownloader(
 		transport.Client(),
@@ -75,12 +89,21 @@ func main() {
 	syncManager.Start()
 
 	logger.V("mounting...")
-	if err = mount.MountAndServe(*flagMountPoint, metaService, blobManager, downloader); err != nil {
+	mountpoint := cfg.FirstAccount().LocalPath
+	// TODO: Better error checking here. All sorts of things like stale
+	// mounts will surface at this moment.
+	err = os.MkdirAll(mountpoint, 0774)
+	if err != nil {
+		logger.F(err)
+	}
+	shutdownChan := make(chan io.Closer, 1)
+	go gracefulShutDown(shutdownChan, mountpoint)
+	if err = mount.MountAndServe(mountpoint, metaService, blobManager, downloader); err != nil {
 		logger.F(err)
 	}
 }
 
-func gracefulShutDown(shutdownc <-chan io.Closer) {
+func gracefulShutDown(shutdownc <-chan io.Closer, mountpoint string) {
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, syscall.SIGHUP)
 	signal.Notify(c, syscall.SIGINT)
@@ -94,7 +117,7 @@ func gracefulShutDown(shutdownc <-chan io.Closer) {
 		switch sig {
 		case syscall.SIGINT:
 			logger.V("Gracefully shutting down...")
-			mount.Umount(*flagMountPoint)
+			mount.Umount(mountpoint)
 			// TODO(burcud): Handle Umount errors
 			go func() {
 				<-time.After(3 * time.Second)
