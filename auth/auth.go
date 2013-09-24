@@ -25,17 +25,17 @@ import (
 
 const (
 	// Google OAuth 2.0 service URLs
-	GoogleOAuth2AuthURL  string = "https://accounts.google.com/o/oauth2/auth"
-	GoogleOAuth2TokenURL string = "https://accounts.google.com/o/oauth2/token"
+	GoogleOAuth2AuthURL = "https://accounts.google.com/o/oauth2/auth"
+	GoogleOAuth2TokenURL = "https://accounts.google.com/o/oauth2/token"
 
 	// OAuth 2.0 OOB redirect URL for authorization.
-	RedirectURL string = "urn:ietf:wg:oauth:2.0:oob"
+	RedirectURL = "urn:ietf:wg:oauth:2.0:oob"
 
 	// OAuth 2.0 full Drive scope used for authorization.
-	DriveScope string = "https://www.googleapis.com/auth/drive"
+	DriveScope = "https://www.googleapis.com/auth/drive"
 
 	// OAuth 2.0 access type for offline/refresh access.
-	AccessType string = "offline"
+	AccessType = "offline"
 )
 
 func newConfig(cfg *config.Account) *oauth.Config {

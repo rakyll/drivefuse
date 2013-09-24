@@ -26,11 +26,11 @@ import (
 )
 
 const (
-	IntervalTick                           = 5 * time.Second // TODO(burcud): need to be adaptive
-	MaxNumberOfConcurrentDownloadsPerQueue = 5
-	MaxSizeQueueTreshold                   = 1 << 20 // TODO(burcud): need to be adaptive
+	intervalTick                           = 5 * time.Second // TODO(burcud): need to be adaptive
+	maxNumberOfConcurrentDownloadsPerQueue = 5
+	maxSizeQueueTreshold                   = 1 << 20 // TODO(burcud): need to be adaptive
 
-	BaseUrlDownloadHost = "https://googledrive.com/host"
+	baseUrlDownloadHost = "https://googledrive.com/host"
 )
 
 type Downloader struct {
@@ -56,13 +56,13 @@ func (d *Downloader) Start() {
 	go func() {
 		for {
 			d.tickForSmall()
-			<-time.After(IntervalTick)
+			<-time.After(intervalTick)
 		}
 	}()
 	go func() {
 		for {
 			d.tickForLarge()
-			<-time.After(IntervalTick)
+			<-time.After(intervalTick)
 		}
 	}()
 }
@@ -70,20 +70,20 @@ func (d *Downloader) Start() {
 func (d *Downloader) tickForSmall() {
 	d.muSmall.Lock()
 	defer d.muSmall.Unlock()
-	d.tick(0, MaxSizeQueueTreshold)
+	d.tick(0, maxSizeQueueTreshold)
 }
 
 func (d *Downloader) tickForLarge() {
 	d.muLarge.Lock()
 	defer d.muLarge.Unlock()
-	d.tick(MaxSizeQueueTreshold+1, math.MaxInt64)
+	d.tick(maxSizeQueueTreshold+1, math.MaxInt64)
 }
 
 func (d *Downloader) tick(minSize int64, maxSize int64) {
 	// TODO: add an additional queue for small sized files
 	// so that, large files dont block the download queue.
 	// retrieve at least MaxNumberOfConcurrentDownloads files to download
-	downloads, _ := d.metaService.ListDownloads(MaxNumberOfConcurrentDownloadsPerQueue, minSize, maxSize)
+	downloads, _ := d.metaService.ListDownloads(maxNumberOfConcurrentDownloadsPerQueue, minSize, maxSize)
 	if len(downloads) == 0 {
 		return
 	}
@@ -105,7 +105,7 @@ func (d *Downloader) download(id string, checksum string) {
 		resp *http.Response
 		err  error
 	)
-	if resp, err = d.client.Get(BaseUrlDownloadHost + "/" + id); err != nil {
+	if resp, err = d.client.Get(baseUrlDownloadHost + "/" + id); err != nil {
 		logger.V("error downloading", id, err)
 		return
 	}

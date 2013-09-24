@@ -16,7 +16,11 @@ package main
 
 import (
 	"flag"
+	"io"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/rakyll/drivefuse/auth"
 	"github.com/rakyll/drivefuse/blob"
@@ -58,6 +62,9 @@ func main() {
 	}
 
 	err = cfg.Load()
+	shutdownChan := make(chan io.Closer, 1)
+	go gracefullyShutDown(shutdownChan)
+
 	if err != nil {
 		logger.F("Did you mean --wizard? Error reading configuration.", err)
 	}
@@ -91,5 +98,30 @@ func main() {
 	}
 	if err = mount.MountAndServe(mountpoint, metaService, blobManager, downloader); err != nil {
 		logger.F(err)
+	}
+}
+
+func gracefulShutDown(shutdownc <-chan io.Closer) {
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, syscall.SIGHUP)
+	signal.Notify(c, syscall.SIGINT)
+	for {
+		sig := <-c
+		sig, ok := sig.(syscall.Signal)
+		if !ok {
+			// ignore non-unix signals
+			return
+		}
+		switch sig {
+		case syscall.SIGINT:
+			logger.V("Gracefully shutting down...")
+			mount.Umount(*flagMountPoint)
+			// TODO(burcud): Handle Umount errors
+			go func() {
+				<-time.After(3 * time.Second)
+				logger.V("Couldn't umount, do it manually, now shutting down...")
+				os.Exit(0)
+			}()
+		}
 	}
 }
