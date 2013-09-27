@@ -49,7 +49,6 @@ var (
 
 func main() {
 	flag.Parse()
-
 	cfg := config.NewConfig(*flagDataDir)
 	err := cfg.Setup()
 	if err != nil {
@@ -122,7 +121,7 @@ func gracefulShutDown(shutdownc <-chan io.Closer, mountpoint string) {
 			go func() {
 				<-time.After(3 * time.Second)
 				logger.V("Couldn't umount, do it manually, now shutting down...")
-				os.Exit(0)
+				os.Exit(1)
 			}()
 		}
 	}
