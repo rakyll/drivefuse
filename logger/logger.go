@@ -26,7 +26,7 @@ const (
 )
 
 var (
-	logLevel = LogLevelFatal
+	logLevel = LogLevelVerbose
 )
 
 func init() {
