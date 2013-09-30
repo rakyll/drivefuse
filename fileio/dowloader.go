@@ -89,50 +89,44 @@ func (d *Downloader) tick(minSize int64, maxSize int64) {
 	}
 	completed := make(chan bool, len(downloads))
 	for _, item := range downloads {
-		go func(id string, checksum string, ch chan bool) {
-			d.download(id, checksum)
+		go func(localId int64, remoteId string, checksum string, ch chan bool) {
+			d.download(localId, remoteId, checksum)
 			ch <- true
-		}(item.Id, item.Md5Checksum, completed)
+		}(item.LocalId, item.Id, item.Md5Checksum, completed)
 	}
 	<-completed
 }
 
-func (d *Downloader) download(id string, checksum string) {
+func (d *Downloader) download(localId int64, remoteId string, checksum string) {
 	// TODO: handle all error cases, make sure queue is not blocked
 	// with erroneous files
-	logger.V("Downloading", id, checksum)
+	logger.V("Downloading", remoteId, checksum)
 	var (
 		resp *http.Response
 		err  error
 	)
-	if resp, err = d.client.Get(baseUrlDownloadHost + "/" + id); err != nil {
-		logger.V("error downloading", id, err)
+	if resp, err = d.client.Get(baseUrlDownloadHost + "/" + remoteId); err != nil {
+		logger.V("error downloading", remoteId, err)
 		return
 	}
 
 	if resp.StatusCode == 404 {
-		d.metaService.DequeueFromIO("download", id)
-		logger.V("error downloading [not found]", id)
+		d.metaService.DequeueFromOp(localId)
+		logger.V("error downloading [not found]", remoteId)
 		return
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		logger.V("error downloading [not ok]", id, resp.StatusCode)
+		logger.V("error downloading [not ok]", remoteId, resp.StatusCode)
 		return
 	}
 
 	defer resp.Body.Close()
-	err = d.blobMngr.Save(id, checksum, resp.Body)
+	err = d.blobMngr.Save(remoteId, checksum, resp.Body)
 	if err != nil {
 		logger.V(err)
 		return
 	}
 
-	err = d.metaService.InitFile(id)
-	if err != nil {
-		logger.V(err)
-		return
-	}
-
-	d.metaService.DequeueFromIO("download", id)
+	d.metaService.DequeueFromOp(localId)
 }

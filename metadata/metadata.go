@@ -16,27 +16,33 @@ package metadata
 
 import (
 	"database/sql"
-	"errors"
 	"fmt"
 	"strconv"
 	"sync"
 	"time"
 
 	"github.com/rakyll/drivefuse/logger"
+	"github.com/rakyll/drivefuse/third_party/github.com/coopernurse/gorp"
 	_ "github.com/rakyll/drivefuse/third_party/github.com/mattn/go-sqlite3"
 )
 
 const (
+	OpNone = iota
+	OpDownload
+	OpUpload
+	OpDelete
+
 	MimeTypeFolder = "application/vnd.google-apps.folder"
-	IdRootFolder   = "root"
+	IdRoot         = "root"
 
 	keyStarted         = "started-before"
 	keyLargestChangeId = "largest-change-id"
 )
 
 // CachedDriveFile represents metadata about a Drive file or folder.
-// TODO(burcud): Rename it to Metadata
+// TODO(burcud): Rename it to FileEntry
 type CachedDriveFile struct {
+	LocalId     int64
 	Id          string
 	ParentId    string
 	Name        string
@@ -44,6 +50,13 @@ type CachedDriveFile struct {
 	LastMod     time.Time
 	Md5Checksum string
 	FileSize    int64
+
+	Op int
+}
+
+type KeyValueEntry struct {
+	Key   string
+	Value string
 }
 
 // Returns true if the object is a folder.
@@ -51,10 +64,14 @@ func (file *CachedDriveFile) IsFolder() bool {
 	return file.MimeType == MimeTypeFolder
 }
 
+func (file *CachedDriveFile) IsExists() bool {
+	return file.LocalId > 0
+}
+
 // MetaService implements utility methods to retrieve, save, delete
 // metadata about Google Drive files/folders.
 type MetaService struct {
-	db *sql.DB
+	dbmap *gorp.DbMap
 
 	mu sync.RWMutex // TODO(burcud): Lock for each file ID indiviually
 }
@@ -65,119 +82,205 @@ func New(dbPath string) (metaservice *MetaService, err error) {
 	if dbase, err = sql.Open("sqlite3", dbPath); err != nil {
 		return
 	}
-	metaservice = &MetaService{db: dbase}
+	metaservice = &MetaService{dbmap: &gorp.DbMap{Db: dbase, Dialect: &gorp.SqliteDialect{}}}
 	if err = metaservice.setup(); err != nil {
 		return
 	}
 	return metaservice, nil
 }
 
-// Cleans up and closes resources used by the meta service.
-func (m *MetaService) Close() error {
-	return m.db.Close()
+// Permanently saves a file/folder's metadata.
+func (m *MetaService) RemoteMod(remoteId string, data *CachedDriveFile) (err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	logger.V("Caching metadata for", remoteId)
+	var file *CachedDriveFile
+	if file, err = m.getByRemoteId(remoteId); err != nil {
+		return err
+	}
+	if file == nil {
+		file = &CachedDriveFile{Id: remoteId}
+	}
+	if data.Md5Checksum != file.Md5Checksum && data.MimeType != MimeTypeFolder {
+		file.Op = OpDownload
+	}
+	file.Id = remoteId
+	file.ParentId = data.ParentId
+	file.Name = data.Name
+	file.MimeType = data.MimeType
+	file.LastMod = data.LastMod
+	file.Md5Checksum = data.Md5Checksum
+	file.FileSize = data.FileSize
+
+	if file.IsExists() {
+		_, err = m.dbmap.Update(file)
+		return
+	}
+	return m.dbmap.Insert(file)
 }
 
-func (m *MetaService) Get(id string) (*CachedDriveFile, error) {
-	files, err := m.listFiles(fmt.Sprintf(sqlGetByRemoteId, id))
-	if err != nil {
+func (m *MetaService) RemoteRm(remoteId string) (err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	// TODO: Handle directories
+	logger.V("Deleting metadata for", remoteId)
+	_, err = m.dbmap.Exec("delete from files where remoteid=?", remoteId)
+	return
+}
+
+func (m *MetaService) LocalCreate(parentId string, name string, isDir bool) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// TODO: implement
+	return nil
+}
+
+func (m *MetaService) LocalMod(localId int64, data *CachedDriveFile) error {
+	// TODO: implement
+	return nil
+}
+
+func (m *MetaService) LocalRemove(localId int64) error {
+	// TODO: implement
+	return nil
+}
+
+func (m *MetaService) LocalDelete(localId int64, name string) error {
+	// TODO: implement
+	return nil
+}
+
+func (m *MetaService) ListDownloads(limit int64, min int64, max int64) (files []*CachedDriveFile, err error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	// TODO: order by lastMod
+	_, err = m.dbmap.Select(&files, "select * from files where op = :op and filesize >= :min and filesize < :max limit :limit", map[string]interface{}{
+		"op":    OpDownload,
+		"min":   min,
+		"max":   max,
+		"limit": limit,
+	})
+	return files, err
+}
+
+// Looks up for files under parentId, named with name.
+func (m *MetaService) GetChildrenWithName(parentId string, name string) (file *CachedDriveFile, err error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	var files []*CachedDriveFile
+	_, err = m.dbmap.Select(&files, "select * from files where parentid = :parentid and name = :name", map[string]interface{}{
+		"parentid": parentId,
+		"name":     name,
+	})
+	if err != nil || len(files) == 0 {
 		return nil, err
-	}
-	if files == nil || len(files) == 0 {
-		return nil, errors.New("file not found")
 	}
 	return files[0], nil
 }
 
-// Permanently saves a file/folder's metadata.
-func (m *MetaService) Save(parentId string, id string, data *CachedDriveFile, download bool, upload bool) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	if download {
-		// check if the content is changed
-		if file, err := m.Get(id); err == nil {
-			// ignore error cases
-			download = data.Md5Checksum != file.Md5Checksum
-		}
-	}
-
-	logger.V("Caching metadata for", id)
-	return m.upsertFile(data, download, upload)
-}
-
-func (m *MetaService) Delete(id string) (err error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	logger.V("Deleting metadata for", id)
-	return m.deleteFile(id)
-}
-
-func (m *MetaService) ListDownloads(limit int64, min int64, max int64) ([]*CachedDriveFile, error) {
-	// TODO: order by lastMod
-	return m.listFiles(fmt.Sprintf(sqlListDownloads, min, max, limit))
-}
-
-// Looks up for files under parentId, named with name.
-func (m *MetaService) LookUp(parentId string, name string) (file *CachedDriveFile, err error) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	query := fmt.Sprintf(sqlLookup, parentId, name)
-	var files []*CachedDriveFile
-	if files, err = m.listFiles(query); err != nil {
-		return
-	}
-	if len(files) > 0 {
-		file = files[0]
-	}
-	return
-}
-
 // Gets the children of folder identified by parentId.
-func (m *MetaService) GetChildren(parentId string) (output []*CachedDriveFile, err error) {
+func (m *MetaService) GetChildren(parentId string) (files []*CachedDriveFile, err error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	query := fmt.Sprintf(sqlChildren, parentId)
-	return m.listFiles(query)
-}
-
-func (m *MetaService) InitFile(id string) (err error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	_, err = m.db.Exec(sqlSetInited, id)
+	_, err = m.dbmap.Select(&files, "select * from files where parentid = :parentid", map[string]interface{}{
+		"parentid": parentId,
+	})
 	return
 }
 
 // Enqueues a file into the upload or download queue.
-func (m *MetaService) EnqueueForIO(queueName string, id string) error {
+func (m *MetaService) EnqueueForOp(op int, id int64) (err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.updateIOQueue(queueName, id, 1)
+	var file *CachedDriveFile
+	if file, err = m.getByLocalId(id); err != nil {
+		return err
+	}
+	file.Op = op
+	_, err = m.dbmap.Update(file)
+	return err
 }
 
 // Removes the file from upload or download queue.
-func (m *MetaService) DequeueFromIO(queueName string, id string) error {
+func (m *MetaService) DequeueFromOp(id int64) (err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.updateIOQueue(queueName, id, 0)
+
+	var file *CachedDriveFile
+	if file, err = m.getByLocalId(id); err != nil {
+		return err
+	}
+	file.Op = OpNone
+	_, err = m.dbmap.Update(file)
+	return err
 }
 
 // Gets the largest change id synchnonized.
 func (m *MetaService) GetLargestChangeId() (largestId int64, err error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	var val string
-	val, err = m.getValue(keyLargestChangeId)
-	if err != nil {
+	if val, err = m.getKey(keyLargestChangeId); err != nil {
 		return
 	}
 	largestId, err = strconv.ParseInt(val, 0, 64)
-	if err != nil {
-		return
-	}
 	return
 }
 
 // Persists the largest change id synchnonized.
 func (m *MetaService) SaveLargestChangeId(id int64) error {
-	return m.setValue(keyLargestChangeId, fmt.Sprintf("%d", id))
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	logger.V("Saving largest change Id", id)
+	e := &KeyValueEntry{Key: keyLargestChangeId, Value: fmt.Sprintf("%d", id)}
+	val, err := m.getKey(keyLargestChangeId)
+	if err != nil {
+		return err
+	}
+	if val == "" {
+		return m.dbmap.Insert(e)
+	}
+	_, err = m.dbmap.Update(e)
+	return err
+}
+
+// Sets up the sqlite db, creates required tables and indexes.
+func (m *MetaService) setup() error {
+	m.dbmap.AddTableWithName(CachedDriveFile{}, "files").SetKeys(true, "LocalId")
+	m.dbmap.AddTableWithName(KeyValueEntry{}, "info").SetKeys(false, "Key")
+	return m.dbmap.CreateTablesIfNotExists()
+}
+
+func (m *MetaService) getByRemoteId(remoteId string) (*CachedDriveFile, error) {
+	var files []*CachedDriveFile
+	_, err := m.dbmap.Select(&files, "select * from files where id = :remoteid", map[string]interface{}{
+		"remoteid": remoteId,
+	})
+	if err != nil || len(files) == 0 {
+		return nil, err
+	}
+	return files[0], err
+}
+
+func (m *MetaService) getByLocalId(localId int64) (*CachedDriveFile, error) {
+	var files []*CachedDriveFile
+	_, err := m.dbmap.Select(&files, "select * from files where localid = :id", map[string]interface{}{
+		"id": localId,
+	})
+	if err != nil || len(files) == 0 {
+		return nil, err
+	}
+	return files[0], err
+}
+
+func (m *MetaService) getKey(key string) (value string, err error) {
+	var vals []string
+	_, err = m.dbmap.Select(&vals, "select value from info where key = ?", key)
+	if err != nil || len(vals) == 0 {
+		return
+	}
+	return vals[0], err
 }

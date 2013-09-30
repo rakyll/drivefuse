@@ -49,7 +49,7 @@ func MountAndServe(mountPoint string, meta *metadata.MetaService, blogMngr *blob
 }
 
 func (GoogleDriveFS) Root() (fuse.Node, fuse.Error) {
-	return GoogleDriveFolder{Id: metadata.IdRootFolder}, nil
+	return GoogleDriveFolder{Id: metadata.IdRoot}, nil
 }
 
 type GoogleDriveFolder struct {
@@ -61,6 +61,7 @@ type GoogleDriveFolder struct {
 }
 
 type GoogleDriveFile struct {
+	LocalId     int64
 	Id          string
 	Name        string
 	MimeType    string
@@ -85,7 +86,7 @@ func (f GoogleDriveFolder) Lookup(name string, intr fuse.Intr) (fuse.Node, fuse.
 		return nil, fuse.ENOENT
 	}
 
-	file, err := metaService.LookUp(f.Id, name)
+	file, err := metaService.GetChildrenWithName(f.Id, name)
 	if err != nil || file == nil {
 		return nil, fuse.ENOENT
 	}
@@ -96,11 +97,16 @@ func (f GoogleDriveFolder) Lookup(name string, intr fuse.Intr) (fuse.Node, fuse.
 			LastMod: file.LastMod}, nil
 	}
 	return GoogleDriveFile{
+		LocalId:     file.LocalId,
 		Id:          file.Id,
 		Name:        file.Name,
 		Size:        file.FileSize,
 		Md5Checksum: file.Md5Checksum,
 		LastMod:     file.LastMod}, nil
+}
+
+func (f GoogleDriveFolder) Mkdir(req *fuse.MkdirRequest, intr fuse.Intr) (fuse.Node, fuse.Error) {
+	return nil, nil
 }
 
 func (f GoogleDriveFolder) ReadDir(intr fuse.Intr) ([]fuse.Dirent, fuse.Error) {
@@ -135,4 +141,5 @@ func (f GoogleDriveFile) Read(req *fuse.ReadRequest, res *fuse.ReadResponse, int
 	return nil
 }
 
-// TODO(burcud): implement mkdir, rename and write
+// TODO(burcud): implement
+// create, mkdir, rename, remove, write, release, truncate

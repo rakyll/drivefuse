@@ -85,12 +85,12 @@ func (d *CachedSyncer) syncInbound(isForce bool) (err error) {
 
 	// retrieve metadata about root
 	var rootFile *client.File
-	if rootFile, err = d.remoteService.Files.Get(metadata.IdRootFolder).Do(); err != nil {
+	if rootFile, err = d.remoteService.Files.Get(metadata.IdRoot).Do(); err != nil {
 		return
 	}
 
-	data := buildMetadata(metadata.IdRootFolder, "", rootFile)
-	if err = d.metaService.Save("", metadata.IdRootFolder, data, false, false); err != nil {
+	data := buildMetadata(metadata.IdRoot, "", rootFile)
+	if err = d.metaService.RemoteMod(metadata.IdRoot, data); err != nil {
 		return
 	}
 	pageToken := ""
@@ -140,7 +140,7 @@ func (d *CachedSyncer) mergeChanges(isInitialSync bool, rootId string, startChan
 func (d *CachedSyncer) mergeChange(rootId string, item *client.Change) (err error) {
 	if item.Deleted || item.File.Labels.Trashed {
 		// TODO(burcud): Handle directory deletions
-		if d.metaService.Delete(item.FileId); err != nil {
+		if d.metaService.RemoteRm(item.FileId); err != nil {
 			return
 		}
 		// delete contents
@@ -158,10 +158,10 @@ func (d *CachedSyncer) mergeChange(rootId string, item *client.Change) (err erro
 			parentId = item.File.Parents[0].Id
 		}
 		if parentId == rootId {
-			parentId = metadata.IdRootFolder
+			parentId = metadata.IdRoot
 		}
 		metadata := buildMetadata(item.FileId, parentId, item.File)
-		if err = d.metaService.Save(parentId, fileId, metadata, !metadata.IsFolder(), false); err != nil {
+		if err = d.metaService.RemoteMod(fileId, metadata); err != nil {
 			return
 		}
 	}

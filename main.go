@@ -94,7 +94,7 @@ func main() {
 	// mounts will surface at this moment.
 	err = os.MkdirAll(mountpoint, 0774)
 	if err != nil {
-		logger.F(err)
+		logger.V(err)
 	}
 	shutdownChan := make(chan io.Closer, 1)
 	go gracefulShutDown(shutdownChan, mountpoint)
