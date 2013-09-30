@@ -49,6 +49,8 @@ var (
 
 func main() {
 	flag.Parse()
+	// add a lock to the config dir, no two instances should
+	// run at the same time
 	cfg := config.NewConfig(*flagDataDir)
 	err := cfg.Setup()
 	if err != nil {
@@ -61,7 +63,6 @@ func main() {
 	}
 
 	err = cfg.Load()
-
 	if err != nil {
 		logger.F("Did you mean --wizard? Error reading configuration.", err)
 	}
