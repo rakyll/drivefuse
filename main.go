@@ -105,7 +105,7 @@ func main() {
 
 func gracefulShutDown(shutdownc <-chan io.Closer, mountpoint string) {
 	c := make(chan os.Signal, 1)
-	signal.Notify(c, syscall.SIGHUP)
+	signal.Notify(c, syscall.SIGTERM)
 	signal.Notify(c, syscall.SIGINT)
 	for {
 		sig := <-c
@@ -115,7 +115,7 @@ func gracefulShutDown(shutdownc <-chan io.Closer, mountpoint string) {
 			return
 		}
 		switch sig {
-		case syscall.SIGINT:
+		case syscall.SIGINT, syscall.SIGTERM:
 			logger.V("Gracefully shutting down...")
 			mount.Umount(mountpoint)
 			// TODO(burcud): Handle Umount errors
