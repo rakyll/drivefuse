@@ -30,6 +30,8 @@ const (
 	sqlSetInited     = "update files set inited = 1 where remoteId = ?"
 	sqlGetValue      = "select value from info where key = '%s'"
 	sqlSetValue      = "insert or replace into info (key, value) values(?, ?)"
+
+	layoutDateTime = "2006-01-02 15:04:05.999999999"
 )
 
 // Sets up the sqlite db, creates required tables and indexes.
@@ -76,9 +78,10 @@ func (m *MetaService) listFiles(query string) (files []*CachedDriveFile, err err
 		var mimetype string
 		var size int64
 		var md5checksum string
-		var lastMod time.Time
+		var lastMod string
 		// TODO(burcud): add all columns
 		rows.Scan(&remoteId, &parentId, &name, &mimetype, &size, &md5checksum, &lastMod)
+		parsedLastMod, _ := time.Parse(layoutDateTime, lastMod)
 		file := &CachedDriveFile{
 			Id:          remoteId,
 			ParentId:    parentId,
@@ -86,7 +89,7 @@ func (m *MetaService) listFiles(query string) (files []*CachedDriveFile, err err
 			MimeType:    mimetype,
 			FileSize:    size,
 			Md5Checksum: md5checksum,
-			LastMod:     lastMod,
+			LastMod:     parsedLastMod,
 		}
 		files = append(files, file)
 	}

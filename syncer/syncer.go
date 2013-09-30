@@ -26,7 +26,7 @@ import (
 
 const (
 	intervalSync   = 30 * time.Second // TODO: should be adaptive
-	layoutDateTime = "2013-09-19T14:29:12.570Z"
+	layoutDateTime = "2006-01-02T15:04:05.000Z"
 )
 
 type CachedSyncer struct {

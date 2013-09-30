@@ -70,7 +70,6 @@ func (f GoogleDriveFolder) Attr() fuse.Attr {
 		Mode:  os.ModeDir | 0400,
 		Uid:   uint32(os.Getuid()),
 		Gid:   uint32(os.Getgid()),
-		Size:  uint64(f.Size),
 		Mtime: f.LastMod,
 	}
 }
@@ -87,13 +86,17 @@ func (f GoogleDriveFolder) Lookup(name string, intr fuse.Intr) (fuse.Node, fuse.
 		return nil, fuse.ENOENT
 	}
 	if file.MimeType == metadata.MimeTypeFolder {
-		return &GoogleDriveFolder{Id: file.Id, Name: file.Name, Size: file.FileSize}, nil
+		return &GoogleDriveFolder{
+			Id:      file.Id,
+			Name:    file.Name,
+			LastMod: file.LastMod}, nil
 	}
 	return GoogleDriveFile{
 		Id:          file.Id,
 		Name:        file.Name,
 		Size:        file.FileSize,
-		Md5Checksum: file.Md5Checksum}, nil
+		Md5Checksum: file.Md5Checksum,
+		LastMod:     file.LastMod}, nil
 }
 
 func (f GoogleDriveFolder) ReadDir(intr fuse.Intr) ([]fuse.Dirent, fuse.Error) {
