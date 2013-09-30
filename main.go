@@ -105,25 +105,17 @@ func main() {
 
 func gracefulShutDown(shutdownc <-chan io.Closer, mountpoint string) {
 	c := make(chan os.Signal, 1)
-	signal.Notify(c, syscall.SIGTERM)
-	signal.Notify(c, syscall.SIGINT)
-	for {
-		sig := <-c
-		sig, ok := sig.(syscall.Signal)
-		if !ok {
-			// ignore non-unix signals
-			return
-		}
-		switch sig {
-		case syscall.SIGINT, syscall.SIGTERM:
-			logger.V("Gracefully shutting down...")
-			mount.Umount(mountpoint)
-			// TODO(burcud): Handle Umount errors
-			go func() {
-				<-time.After(3 * time.Second)
-				logger.V("Couldn't umount, do it manually, now shutting down...")
-				os.Exit(1)
-			}()
-		}
+	signal.Notify(c, syscall.SIGTERM, syscall.SIGINT)
+
+	select {
+	case <-c:
+		logger.V("Gracefully shutting down...")
+		mount.Umount(mountpoint)
+		// TODO(burcud): Handle Umount errors
+		go func() {
+			<-time.After(3 * time.Second)
+			logger.V("Couldn't umount, do it manually, now shutting down...")
+			os.Exit(1)
+		}()
 	}
 }

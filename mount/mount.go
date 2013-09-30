@@ -36,6 +36,10 @@ func MountAndServe(mountPoint string, meta *metadata.MetaService, blogMngr *blob
 	metaService = meta
 	blobManager = blogMngr
 	downloader = down
+
+	// try to umount first to cleanup unmounted volumes
+	Umount(mountPoint)
+
 	c, err := fuse.Mount(mountPoint)
 	if err != nil {
 		return err
