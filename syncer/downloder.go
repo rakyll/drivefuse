@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package fileio
+package syncer
 
 import (
 	"math"
@@ -111,7 +111,7 @@ func (d *Downloader) download(localId int64, remoteId string, checksum string) {
 	}
 
 	if resp.StatusCode == 404 {
-		d.metaService.DequeueFromOp(localId)
+		d.metaService.SetOp(localId, metadata.OpNone)
 		logger.V("error downloading [not found]", remoteId)
 		return
 	}
@@ -122,11 +122,11 @@ func (d *Downloader) download(localId int64, remoteId string, checksum string) {
 	}
 
 	defer resp.Body.Close()
-	err = d.blobMngr.Save(remoteId, checksum, resp.Body)
+	err = d.blobMngr.Save(localId, checksum, resp.Body)
 	if err != nil {
 		logger.V(err)
 		return
 	}
 
-	d.metaService.DequeueFromOp(localId)
+	d.metaService.SetOp(localId, metadata.OpNone)
 }

@@ -35,21 +35,20 @@ const (
 	MimeTypeFolder = "application/vnd.google-apps.folder"
 	IdRoot         = "root"
 
-	keyStarted         = "started-before"
 	keyLargestChangeId = "largest-change-id"
 )
 
 // CachedDriveFile represents metadata about a Drive file or folder.
 // TODO(burcud): Rename it to FileEntry
 type CachedDriveFile struct {
-	LocalId     int64
-	Id          string
-	ParentId    string
-	Name        string
-	MimeType    string
-	LastMod     time.Time
-	Md5Checksum string
-	FileSize    int64
+	LocalId       int64
+	LocalParentId int64
+	Id            string
+	Name          string
+	LastMod       time.Time
+	Md5Checksum   string
+	FileSize      int64
+	IsDir         bool
 
 	Op int
 }
@@ -57,15 +56,6 @@ type CachedDriveFile struct {
 type KeyValueEntry struct {
 	Key   string
 	Value string
-}
-
-// Returns true if the object is a folder.
-func (file *CachedDriveFile) IsFolder() bool {
-	return file.MimeType == MimeTypeFolder
-}
-
-func (file *CachedDriveFile) IsExists() bool {
-	return file.LocalId > 0
 }
 
 // MetaService implements utility methods to retrieve, save, delete
@@ -90,11 +80,18 @@ func New(dbPath string) (metaservice *MetaService, err error) {
 }
 
 // Permanently saves a file/folder's metadata.
-func (m *MetaService) RemoteMod(remoteId string, data *CachedDriveFile) (err error) {
+func (m *MetaService) RemoteMod(remoteId string, newParentRemoteId string, data *CachedDriveFile) (err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	logger.V("Caching metadata for", remoteId)
+	var parentFile *CachedDriveFile
+	if newParentRemoteId != "" {
+		if parentFile, err = m.getByRemoteId(newParentRemoteId); err != nil {
+			return err
+		}
+	}
+
 	var file *CachedDriveFile
 	if file, err = m.getByRemoteId(remoteId); err != nil {
 		return err
@@ -102,18 +99,21 @@ func (m *MetaService) RemoteMod(remoteId string, data *CachedDriveFile) (err err
 	if file == nil {
 		file = &CachedDriveFile{Id: remoteId}
 	}
-	if data.Md5Checksum != file.Md5Checksum && data.MimeType != MimeTypeFolder {
+	if data.Md5Checksum != file.Md5Checksum && !data.IsDir {
 		file.Op = OpDownload
 	}
 	file.Id = remoteId
-	file.ParentId = data.ParentId
+
 	file.Name = data.Name
-	file.MimeType = data.MimeType
 	file.LastMod = data.LastMod
 	file.Md5Checksum = data.Md5Checksum
 	file.FileSize = data.FileSize
-
-	if file.IsExists() {
+	file.IsDir = data.IsDir
+	file.LocalParentId = 0
+	if parentFile != nil {
+		file.LocalParentId = parentFile.LocalId
+	}
+	if file.LocalId > 0 {
 		_, err = m.dbmap.Update(file)
 		return
 	}
@@ -123,33 +123,69 @@ func (m *MetaService) RemoteMod(remoteId string, data *CachedDriveFile) (err err
 func (m *MetaService) RemoteRm(remoteId string) (err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	// TODO: Handle directories
+	// TODO: Handle directories recursively
 	logger.V("Deleting metadata for", remoteId)
-	_, err = m.dbmap.Exec("delete from files where remoteid=?", remoteId)
-	return
+	var file *CachedDriveFile
+	if file, err = m.getByRemoteId(remoteId); err != nil {
+		return err
+	}
+	if file == nil {
+		return
+	}
+	file.Op = OpDelete
+	_, err = m.dbmap.Update(file)
+	return err
 }
 
-func (m *MetaService) LocalCreate(parentId string, name string, isDir bool) error {
+func (m *MetaService) LocalCreate(localParentId int64, name string, filesize int64, isDir bool) (*CachedDriveFile, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-
-	// TODO: implement
-	return nil
+	file := &CachedDriveFile{
+		LocalParentId: localParentId,
+		Name:          name,
+		LastMod:       time.Now(),
+		FileSize:      filesize,
+		IsDir:         isDir,
+		Op:            OpUpload,
+	}
+	err := m.dbmap.Insert(file)
+	return file, err
 }
 
-func (m *MetaService) LocalMod(localId int64, data *CachedDriveFile) error {
-	// TODO: implement
-	return nil
+func (m *MetaService) LocalMod(localId int64, newParentId int64, newName string, newFileSize int64) (err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var file *CachedDriveFile
+	if file, err = m.getByLocalId(localId); err != nil {
+		return err
+	}
+	file.Name = newName
+	file.LocalParentId = newParentId
+	file.FileSize = newFileSize
+	file.Md5Checksum = ""
+	file.LastMod = time.Now()
+	file.Op = OpUpload
+	_, err = m.dbmap.Update(file)
+	return err
 }
 
-func (m *MetaService) LocalRemove(localId int64) error {
-	// TODO: implement
-	return nil
-}
-
-func (m *MetaService) LocalDelete(localId int64, name string) error {
-	// TODO: implement
-	return nil
+func (m *MetaService) LocalRm(localParentId int64, name string, isDir bool) (err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var files []*CachedDriveFile
+	_, err = m.dbmap.Select(&files, "select * from files where localparentid = :localparentid and name = :name and op != :opdelete", map[string]interface{}{
+		"localparentid": localParentId,
+		"name":          name,
+		"opdelete":      OpDelete,
+	})
+	if err != nil || len(files) == 0 {
+		return err
+	}
+	file := files[0]
+	logger.V(file)
+	file.Op = OpDelete
+	_, err = m.dbmap.Update(file)
+	return err
 }
 
 func (m *MetaService) ListDownloads(limit int64, min int64, max int64) (files []*CachedDriveFile, err error) {
@@ -166,14 +202,15 @@ func (m *MetaService) ListDownloads(limit int64, min int64, max int64) (files []
 }
 
 // Looks up for files under parentId, named with name.
-func (m *MetaService) GetChildrenWithName(parentId string, name string) (file *CachedDriveFile, err error) {
+func (m *MetaService) GetChildrenWithName(localparentid int64, name string) (file *CachedDriveFile, err error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
 	var files []*CachedDriveFile
-	_, err = m.dbmap.Select(&files, "select * from files where parentid = :parentid and name = :name", map[string]interface{}{
-		"parentid": parentId,
-		"name":     name,
+	_, err = m.dbmap.Select(&files, "select * from files where localparentid = :localparentid and name = :name and op != :opdelete", map[string]interface{}{
+		"localparentid": localparentid,
+		"name":          name,
+		"opdelete":      OpDelete,
 	})
 	if err != nil || len(files) == 0 {
 		return nil, err
@@ -182,38 +219,25 @@ func (m *MetaService) GetChildrenWithName(parentId string, name string) (file *C
 }
 
 // Gets the children of folder identified by parentId.
-func (m *MetaService) GetChildren(parentId string) (files []*CachedDriveFile, err error) {
+func (m *MetaService) GetChildren(localparentid int64) (files []*CachedDriveFile, err error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	_, err = m.dbmap.Select(&files, "select * from files where parentid = :parentid", map[string]interface{}{
-		"parentid": parentId,
+	_, err = m.dbmap.Select(&files, "select * from files where localparentid = :localparentid and op != :opdelete", map[string]interface{}{
+		"localparentid": localparentid,
+		"opdelete":      OpDelete,
 	})
 	return
 }
 
 // Enqueues a file into the upload or download queue.
-func (m *MetaService) EnqueueForOp(op int, id int64) (err error) {
+func (m *MetaService) SetOp(localId int64, op int) (err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	var file *CachedDriveFile
-	if file, err = m.getByLocalId(id); err != nil {
+	if file, err = m.getByLocalId(localId); err != nil {
 		return err
 	}
 	file.Op = op
-	_, err = m.dbmap.Update(file)
-	return err
-}
-
-// Removes the file from upload or download queue.
-func (m *MetaService) DequeueFromOp(id int64) (err error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	var file *CachedDriveFile
-	if file, err = m.getByLocalId(id); err != nil {
-		return err
-	}
-	file.Op = OpNone
 	_, err = m.dbmap.Update(file)
 	return err
 }

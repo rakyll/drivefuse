@@ -16,6 +16,7 @@ package blob
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -33,7 +34,7 @@ func New(blobPath string) *Manager {
 	return &Manager{blobPath: blobPath}
 }
 
-func (f *Manager) Save(id string, checksum string, rc io.ReadCloser) error {
+func (f *Manager) Save(id int64, checksum string, rc io.ReadCloser) error {
 	f.cleanup(id, checksum)
 	if err := os.MkdirAll(f.getBlobDir(id), 0750); err != nil {
 		return err
@@ -60,7 +61,7 @@ func (f *Manager) Save(id string, checksum string, rc io.ReadCloser) error {
 	return nil
 }
 
-func (f *Manager) Read(id string, checksum string, seek int64, l int) (blob []byte, size int64, err error) {
+func (f *Manager) Read(id int64, checksum string, seek int64, l int) (blob []byte, size int64, err error) {
 	var file *os.File
 	file, err = os.Open(f.getBlobPath(id, checksum))
 	if err != nil {
@@ -75,12 +76,12 @@ func (f *Manager) Read(id string, checksum string, seek int64, l int) (blob []by
 	return blob, int64(s), err
 }
 
-func (f *Manager) Delete(id string) error {
+func (f *Manager) Delete(id int64) error {
 	// TODO(burcud): rm directory if not required anymore
 	return f.cleanup(id, "*")
 }
 
-func (f *Manager) cleanup(id string, checksum string) (err error) {
+func (f *Manager) cleanup(id int64, checksum string) (err error) {
 	var blobs []os.FileInfo
 	if blobs, err = ioutil.ReadDir(f.getBlobDir(id)); err != nil {
 		return
@@ -98,15 +99,15 @@ func (f *Manager) cleanup(id string, checksum string) (err error) {
 	return nil
 }
 
-func (f *Manager) getBlobDir(id string) string {
-	l := len(id)
-	return path.Join(f.blobPath, id[l-2:l])
+func (f *Manager) getBlobDir(id int64) string {
+	idStr := fmt.Sprintf("%d", id)
+	return path.Join(f.blobPath, idStr[0:1])
 }
 
-func (f *Manager) getBlobName(id string, checksum string) string {
-	return id + "==" + checksum
+func (f *Manager) getBlobName(id int64, checksum string) string {
+	return fmt.Sprintf("%d==%s", id, checksum)
 }
 
-func (f *Manager) getBlobPath(id string, checksum string) string {
+func (f *Manager) getBlobPath(id int64, checksum string) string {
 	return path.Join(f.getBlobDir(id), f.getBlobName(id, checksum))
 }

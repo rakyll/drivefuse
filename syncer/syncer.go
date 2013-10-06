@@ -21,6 +21,7 @@ import (
 	"github.com/rakyll/drivefuse/blob"
 	"github.com/rakyll/drivefuse/logger"
 	"github.com/rakyll/drivefuse/metadata"
+	"github.com/rakyll/drivefuse/third_party/code.google.com/p/goauth2/oauth"
 	client "github.com/rakyll/drivefuse/third_party/code.google.com/p/google-api-go-client/drive/v2"
 )
 
@@ -30,18 +31,20 @@ const (
 )
 
 type CachedSyncer struct {
+	downloader *Downloader
+
 	remoteService *client.Service
 	metaService   *metadata.MetaService
-	blobManager   *blob.Manager
 
 	mu sync.RWMutex
 }
 
-func NewCachedSyncer(service *client.Service, metaService *metadata.MetaService, blobManager *blob.Manager) *CachedSyncer {
+func NewCachedSyncer(t *oauth.Transport, metaService *metadata.MetaService, blobManager *blob.Manager) *CachedSyncer {
+	driveService, _ := client.New(t.Client())
 	return &CachedSyncer{
-		remoteService: service,
+		downloader:    NewDownloader(t.Client(), metaService, blobManager),
+		remoteService: driveService,
 		metaService:   metaService,
-		blobManager:   blobManager,
 	}
 }
 
@@ -52,6 +55,7 @@ func (d *CachedSyncer) Start() {
 			<-time.After(intervalSync)
 		}
 	}()
+	d.downloader.Start()
 }
 
 func (d *CachedSyncer) Sync(isForce bool) (err error) {
@@ -89,8 +93,8 @@ func (d *CachedSyncer) syncInbound(isForce bool) (err error) {
 		return
 	}
 
-	data := buildMetadata(metadata.IdRoot, "", rootFile)
-	if err = d.metaService.RemoteMod(metadata.IdRoot, data); err != nil {
+	data := buildMetadata(metadata.IdRoot, rootFile)
+	if err = d.metaService.RemoteMod(metadata.IdRoot, "", data); err != nil {
 		return
 	}
 	pageToken := ""
@@ -143,10 +147,7 @@ func (d *CachedSyncer) mergeChange(rootId string, item *client.Change) (err erro
 		if d.metaService.RemoteRm(item.FileId); err != nil {
 			return
 		}
-		// delete contents
-		if d.blobManager.Delete(item.FileId); err != nil {
-			return
-		}
+		// TODO: delete contents, op to delete
 	} else {
 		if item.File.DownloadUrl == "" && item.File.MimeType != metadata.MimeTypeFolder {
 			return
@@ -160,23 +161,24 @@ func (d *CachedSyncer) mergeChange(rootId string, item *client.Change) (err erro
 		if parentId == rootId {
 			parentId = metadata.IdRoot
 		}
-		metadata := buildMetadata(item.FileId, parentId, item.File)
-		if err = d.metaService.RemoteMod(fileId, metadata); err != nil {
+		logger.V("parentId", parentId)
+		metadata := buildMetadata(item.FileId, item.File)
+		if err = d.metaService.RemoteMod(fileId, parentId, metadata); err != nil {
 			return
 		}
 	}
 	return
 }
 
-func buildMetadata(id string, parentId string, file *client.File) *metadata.CachedDriveFile {
+func buildMetadata(id string, file *client.File) *metadata.CachedDriveFile {
 	lastMod, _ := time.Parse(layoutDateTime, file.ModifiedDate)
-	return &metadata.CachedDriveFile{
+	driveFile := &metadata.CachedDriveFile{
 		Id:          id,
-		ParentId:    parentId, // ignoring multiple parents
 		Name:        file.Title,
-		MimeType:    file.MimeType,
 		FileSize:    file.FileSize,
 		Md5Checksum: file.Md5Checksum,
 		LastMod:     lastMod,
 	}
+	driveFile.IsDir = file.MimeType == metadata.MimeTypeFolder
+	return driveFile
 }

@@ -19,24 +19,26 @@ import (
 	"time"
 
 	"github.com/rakyll/drivefuse/blob"
-	"github.com/rakyll/drivefuse/fileio"
 	"github.com/rakyll/drivefuse/metadata"
 	"github.com/rakyll/drivefuse/third_party/code.google.com/p/rsc/fuse"
+)
+
+const (
+	defaultFileMod = 0774
 )
 
 var (
 	metaService *metadata.MetaService
 	blobManager *blob.Manager
-	downloader  *fileio.Downloader
 )
 
 type GoogleDriveFS struct{}
 
-func MountAndServe(mountPoint string, meta *metadata.MetaService, blogMngr *blob.Manager, down *fileio.Downloader) error {
+func MountAndServe(mountPoint string, meta *metadata.MetaService, blogMngr *blob.Manager) error {
 	metaService = meta
 	blobManager = blogMngr
-	downloader = down
 
+	os.MkdirAll(mountPoint, defaultFileMod)
 	// try to umount first to cleanup unmounted volumes
 	Umount(mountPoint)
 
@@ -49,30 +51,29 @@ func MountAndServe(mountPoint string, meta *metadata.MetaService, blogMngr *blob
 }
 
 func (GoogleDriveFS) Root() (fuse.Node, fuse.Error) {
-	return GoogleDriveFolder{Id: metadata.IdRoot}, nil
+	return GoogleDriveFolder{LocalId: 1}, nil
 }
 
 type GoogleDriveFolder struct {
-	Id       string
-	Name     string
-	MimeType string
-	Size     int64
-	LastMod  time.Time
+	LocalId       int64
+	LocalParentId int64
+	Name          string
+	Size          int64
+	LastMod       time.Time
 }
 
 type GoogleDriveFile struct {
-	LocalId     int64
-	Id          string
-	Name        string
-	MimeType    string
-	Md5Checksum string
-	Size        int64
-	LastMod     time.Time
+	LocalId       int64
+	LocalParentId int64
+	Name          string
+	Md5Checksum   string
+	Size          int64
+	LastMod       time.Time
 }
 
 func (f GoogleDriveFolder) Attr() fuse.Attr {
 	return fuse.Attr{
-		Mode:  os.ModeDir | 0400,
+		Mode:  os.ModeDir | defaultFileMod,
 		Uid:   uint32(os.Getuid()),
 		Gid:   uint32(os.Getgid()),
 		Mtime: f.LastMod,
@@ -86,36 +87,53 @@ func (f GoogleDriveFolder) Lookup(name string, intr fuse.Intr) (fuse.Node, fuse.
 		return nil, fuse.ENOENT
 	}
 
-	file, err := metaService.GetChildrenWithName(f.Id, name)
+	file, err := metaService.GetChildrenWithName(f.LocalId, name)
 	if err != nil || file == nil {
 		return nil, fuse.ENOENT
 	}
-	if file.MimeType == metadata.MimeTypeFolder {
-		return &GoogleDriveFolder{
-			Id:      file.Id,
-			Name:    file.Name,
-			LastMod: file.LastMod}, nil
+	if file.IsDir {
+		return convertToDirNode(file), nil
 	}
-	return GoogleDriveFile{
-		LocalId:     file.LocalId,
-		Id:          file.Id,
-		Name:        file.Name,
-		Size:        file.FileSize,
-		Md5Checksum: file.Md5Checksum,
-		LastMod:     file.LastMod}, nil
+	return convertToFileNode(file), nil
 }
 
 func (f GoogleDriveFolder) Mkdir(req *fuse.MkdirRequest, intr fuse.Intr) (fuse.Node, fuse.Error) {
-	return nil, nil
+	file, err := metaService.LocalCreate(f.LocalId, req.Name, 0, true)
+	if err != nil {
+		return nil, fuse.ENOENT
+	}
+	return convertToDirNode(file), nil
+}
+
+func (f GoogleDriveFolder) Create(req *fuse.CreateRequest, res *fuse.CreateResponse, intr fuse.Intr) (fuse.Node, fuse.Handle, fuse.Error) {
+	file, err := metaService.LocalCreate(f.LocalId, req.Name, 0, false)
+	if err != nil {
+		return nil, nil, fuse.ENOENT
+	}
+	return convertToFileNode(file), nil, nil
 }
 
 func (f GoogleDriveFolder) ReadDir(intr fuse.Intr) ([]fuse.Dirent, fuse.Error) {
 	ents := []fuse.Dirent{}
-	children, _ := metaService.GetChildren(f.Id)
+	children, _ := metaService.GetChildren(f.LocalId)
 	for _, item := range children {
 		ents = append(ents, fuse.Dirent{Name: item.Name})
 	}
 	return ents, nil
+}
+
+func (f GoogleDriveFolder) Rename(req *fuse.RenameRequest, newDir fuse.Node, intr fuse.Intr) fuse.Error {
+	// metadata only
+	panic("not implemented")
+	return nil
+}
+
+func (f GoogleDriveFolder) Remove(req *fuse.RemoveRequest, intr fuse.Intr) fuse.Error {
+	// TODO: handle files with same names under a directory
+	if err := metaService.LocalRm(f.LocalId, req.Name, req.Dir); err != nil {
+		return fuse.EIO
+	}
+	return nil
 }
 
 func (f GoogleDriveFile) Attr() fuse.Attr {
@@ -128,17 +146,40 @@ func (f GoogleDriveFile) Attr() fuse.Attr {
 	}
 }
 
+func (f GoogleDriveFile) Write(req *fuse.WriteRequest, res *fuse.WriteResponse, intr fuse.Intr) fuse.Error {
+	// blob manager and metadata only
+	panic("not implemented")
+	return nil
+}
+
 func (f GoogleDriveFile) Read(req *fuse.ReadRequest, res *fuse.ReadResponse, intr fuse.Intr) fuse.Error {
 	var blob []byte
 	var err error
-
-	if blob, _, err = blobManager.Read(f.Id, f.Md5Checksum, req.Offset, req.Size); err != nil {
+	if blob, _, err = blobManager.Read(f.LocalId, f.Md5Checksum, req.Offset, req.Size); err != nil {
 		// TODO: add a loading icon and etc
 		// TODO: force add the file to the download queue
 		return nil
 	}
 	res.Data = blob
 	return nil
+}
+
+func convertToDirNode(file *metadata.CachedDriveFile) *GoogleDriveFolder {
+	return &GoogleDriveFolder{
+		LocalId:       file.LocalId,
+		LocalParentId: file.LocalParentId,
+		Name:          file.Name,
+		LastMod:       file.LastMod}
+}
+
+func convertToFileNode(file *metadata.CachedDriveFile) *GoogleDriveFile {
+	return &GoogleDriveFile{
+		LocalId:       file.LocalId,
+		LocalParentId: file.LocalParentId,
+		Name:          file.Name,
+		Size:          file.FileSize,
+		Md5Checksum:   file.Md5Checksum,
+		LastMod:       file.LastMod}
 }
 
 // TODO(burcud): implement

@@ -5,3 +5,4 @@
 * Better error handling on downloads.
 * Show sync status, maybe an info service on port XXXXX.
 * Adaptive sync scheduling.
+* Remove blobs for remotely deleted items

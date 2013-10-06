@@ -26,7 +26,6 @@ import (
 	"github.com/rakyll/drivefuse/blob"
 	"github.com/rakyll/drivefuse/cmd"
 	"github.com/rakyll/drivefuse/config"
-	"github.com/rakyll/drivefuse/fileio"
 	"github.com/rakyll/drivefuse/logger"
 	"github.com/rakyll/drivefuse/metadata"
 	"github.com/rakyll/drivefuse/mount"
@@ -68,18 +67,11 @@ func main() {
 	}
 
 	transport := auth.NewTransport(cfg.FirstAccount())
-
 	metaService, _ = metadata.New(cfg.MetadataPath())
-	driveService, _ = client.New(transport.Client())
 	blobManager = blob.New(cfg.BlobPath())
 
-	downloader := fileio.NewDownloader(
-		transport.Client(),
-		metaService,
-		blobManager)
-
 	syncManager := syncer.NewCachedSyncer(
-		driveService,
+		transport,
 		metaService,
 		blobManager)
 
@@ -98,7 +90,7 @@ func main() {
 	}
 	shutdownChan := make(chan io.Closer, 1)
 	go gracefulShutDown(shutdownChan, mountpoint)
-	if err = mount.MountAndServe(mountpoint, metaService, blobManager, downloader); err != nil {
+	if err = mount.MountAndServe(mountpoint, metaService, blobManager); err != nil {
 		logger.F(err)
 	}
 }
