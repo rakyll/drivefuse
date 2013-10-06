@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/rakyll/drivefuse/blob"
+	"github.com/rakyll/drivefuse/logger"
 	"github.com/rakyll/drivefuse/metadata"
 	"github.com/rakyll/drivefuse/third_party/code.google.com/p/rsc/fuse"
 )
@@ -51,10 +52,10 @@ func MountAndServe(mountPoint string, meta *metadata.MetaService, blogMngr *blob
 }
 
 func (GoogleDriveFS) Root() (fuse.Node, fuse.Error) {
-	return GoogleDriveFolder{LocalId: 1}, nil
+	return &GoogleDriveFolder{LocalId: 1}, nil
 }
 
-type GoogleDriveFolder struct {
+type GoogleDriveFolder struct { // Note: don't change folder terminology
 	LocalId       int64
 	LocalParentId int64
 	Name          string
@@ -123,8 +124,11 @@ func (f GoogleDriveFolder) ReadDir(intr fuse.Intr) ([]fuse.Dirent, fuse.Error) {
 }
 
 func (f GoogleDriveFolder) Rename(req *fuse.RenameRequest, newDir fuse.Node, intr fuse.Intr) fuse.Error {
-	// metadata only
-	panic("not implemented")
+	// TODO: handle files with same names under a directory
+	dir := newDir.(*GoogleDriveFolder)
+	if err := metaService.LocalMod(f.LocalId, req.OldName, dir.LocalId, req.NewName, -1); err != nil {
+		return fuse.EIO
+	}
 	return nil
 }
 

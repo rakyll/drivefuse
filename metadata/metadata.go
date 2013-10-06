@@ -152,17 +152,24 @@ func (m *MetaService) LocalCreate(localParentId int64, name string, filesize int
 	return file, err
 }
 
-func (m *MetaService) LocalMod(localId int64, newParentId int64, newName string, newFileSize int64) (err error) {
+func (m *MetaService) LocalMod(localParentId int64, name string, newParentId int64, newName string, newFileSize int64) (err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	var file *CachedDriveFile
-	if file, err = m.getByLocalId(localId); err != nil {
+	var files []*CachedDriveFile
+	_, err = m.dbmap.Select(&files, "select * from files where localparentid = :localparentid and name = :name and op != :opdelete", map[string]interface{}{
+		"localparentid": localParentId,
+		"name":          name,
+		"opdelete":      OpDelete,
+	})
+	if err != nil || len(files) == 0 {
 		return err
 	}
+	file := files[0]
 	file.Name = newName
 	file.LocalParentId = newParentId
-	file.FileSize = newFileSize
-	file.Md5Checksum = ""
+	if newFileSize > -1 {
+		file.FileSize = newFileSize
+	}
 	file.LastMod = time.Now()
 	file.Op = OpUpload
 	_, err = m.dbmap.Update(file)
@@ -182,7 +189,6 @@ func (m *MetaService) LocalRm(localParentId int64, name string, isDir bool) (err
 		return err
 	}
 	file := files[0]
-	logger.V(file)
 	file.Op = OpDelete
 	_, err = m.dbmap.Update(file)
 	return err
