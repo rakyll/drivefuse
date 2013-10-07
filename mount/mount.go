@@ -19,7 +19,6 @@ import (
 	"time"
 
 	"github.com/rakyll/drivefuse/blob"
-	"github.com/rakyll/drivefuse/logger"
 	"github.com/rakyll/drivefuse/metadata"
 	"github.com/rakyll/drivefuse/third_party/code.google.com/p/rsc/fuse"
 )
@@ -115,6 +114,7 @@ func (f GoogleDriveFolder) Create(req *fuse.CreateRequest, res *fuse.CreateRespo
 }
 
 func (f GoogleDriveFolder) ReadDir(intr fuse.Intr) ([]fuse.Dirent, fuse.Error) {
+	// TODO: handle files with same names under a directory
 	ents := []fuse.Dirent{}
 	children, _ := metaService.GetChildren(f.LocalId)
 	for _, item := range children {
@@ -186,5 +186,4 @@ func convertToFileNode(file *metadata.CachedDriveFile) *GoogleDriveFile {
 		LastMod:       file.LastMod}
 }
 
-// TODO(burcud): implement
-// create, mkdir, rename, remove, write, release, truncate
+// TODO(burcud): implement write, release, truncate

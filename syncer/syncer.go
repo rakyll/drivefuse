@@ -147,7 +147,6 @@ func (d *CachedSyncer) mergeChange(rootId string, item *client.Change) (err erro
 		if d.metaService.RemoteRm(item.FileId); err != nil {
 			return
 		}
-		// TODO: delete contents, op to delete
 	} else {
 		if item.File.DownloadUrl == "" && item.File.MimeType != metadata.MimeTypeFolder {
 			return
@@ -161,7 +160,6 @@ func (d *CachedSyncer) mergeChange(rootId string, item *client.Change) (err erro
 		if parentId == rootId {
 			parentId = metadata.IdRoot
 		}
-		logger.V("parentId", parentId)
 		metadata := buildMetadata(item.FileId, item.File)
 		if err = d.metaService.RemoteMod(fileId, parentId, metadata); err != nil {
 			return
@@ -177,6 +175,7 @@ func buildMetadata(id string, file *client.File) *metadata.CachedDriveFile {
 		Name:        file.Title,
 		FileSize:    file.FileSize,
 		Md5Checksum: file.Md5Checksum,
+		LastEtag:    file.Etag,
 		LastMod:     lastMod,
 	}
 	driveFile.IsDir = file.MimeType == metadata.MimeTypeFolder

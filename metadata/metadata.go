@@ -47,6 +47,7 @@ type CachedDriveFile struct {
 	Name          string
 	LastMod       time.Time
 	Md5Checksum   string
+	LastEtag      string
 	FileSize      int64
 	IsDir         bool
 
@@ -107,6 +108,7 @@ func (m *MetaService) RemoteMod(remoteId string, newParentRemoteId string, data 
 	file.Name = data.Name
 	file.LastMod = data.LastMod
 	file.Md5Checksum = data.Md5Checksum
+	file.LastEtag = data.LastEtag
 	file.FileSize = data.FileSize
 	file.IsDir = data.IsDir
 	file.LocalParentId = 0
